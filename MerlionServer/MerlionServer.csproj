@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{C2139D01-58D6-413B-96B4-9EB1E87EE454}</ProjectGuid>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Merlion.Server</RootNamespace>
+    <AssemblyName>MerlionServer</AssemblyName>
+    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug</OutputPath>
+    <DefineConstants>DEBUG;</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <ConsolePause>false</ConsolePause>
+    <Commandlineparameters>-Master</Commandlineparameters>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>full</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release</OutputPath>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <Externalconsole>true</Externalconsole>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Configuration" />
+    <Reference Include="System.Xml" />
+    <Reference Include="System.Web" />
+    <Reference Include="System.Core" />
+    <Reference Include="Ionic.Zip">
+      <HintPath>..\packages\DotNetZip.1.9.3\lib\net20\Ionic.Zip.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Web.Extensions, Version=1.0.61025.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35">
+      <Private>True</Private>
+      <SpecificVersion>False</SpecificVersion>
+    </Reference>
+    <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="log4net">
+      <HintPath>..\packages\log4net.2.0.3\lib\net40-full\log4net.dll</HintPath>
+    </Reference>
+    <Reference Include="Kayak">
+      <HintPath>..\packages\Kayak.0.7.2\lib\Kayak.dll</HintPath>
+    </Reference>
+    <Reference Include="Mono.Posix" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="AppConfiguration.cs" />
+    <Compile Include="Web\WebInterface.cs" />
+    <Compile Include="MasterServer.cs" />
+    <Compile Include="NodeServer.cs" />
+    <Compile Include="MasterServer.NodeListener.cs" />
+    <Compile Include="MasterServer.ClientListener.cs" />
+    <Compile Include="VersionManager.cs" />
+    <Compile Include="Protocol.cs" />
+    <Compile Include="MasterServer.Balancer.cs" />
+    <Compile Include="Balancer.cs" />
+    <Compile Include="ServerLogManager.cs" />
+    <Compile Include="DomainManager.cs" />
+    <Compile Include="Domain.cs" />
+    <Compile Include="Utils\StreamSplitter.cs" />
+    <Compile Include="Utils\ByteArraySearch.cs" />
+    <Compile Include="Web\MultipartParser.cs" />
+    <Compile Include="Utils\StreamUtils.cs" />
+    <Compile Include="Utils\TakeStream.cs" />
+    <Compile Include="Web\FormUrlEncodedParser.cs" />
+    <Compile Include="ServerLogAppender.cs" />
+    <Compile Include="Utils\LoggingEventDataSerializer.cs" />
+    <Compile Include="Web\HttpServer.cs" />
+    <Compile Include="Utils\UnclosableStream.cs" />
+    <Compile Include="Utils\PipeStream.cs" />
+    <Compile Include="Utils\StreamAsyncCopier.cs" />
+    <Compile Include="NativeServerInterop.cs" />
+    <Compile Include="NativeMasterServer.cs" />
+    <Compile Include="NativeNodeServer.cs" />
+    <Compile Include="Utils\InvalidStream.cs" />
+  </ItemGroup>
+  <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
+  <ItemGroup>
+    <ProjectReference Include="..\Merlion\Merlion.csproj">
+      <Project>{0A861EAA-56F9-4200-B1FA-173E3B8AACB2}</Project>
+      <Name>Merlion</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app.config" />
+    <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Web\" />
+    <Folder Include="Web\css\" />
+    <Folder Include="Web\fonts\" />
+    <Folder Include="Web\js\" />
+    <Folder Include="Utils\" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Web\WebPage.css" />
+    <EmbeddedResource Include="Web\Background.gif" />
+    <EmbeddedResource Include="Web\Default.html" />
+    <EmbeddedResource Include="Web\Console.js" />
+    <EmbeddedResource Include="Web\jquery-2.1.1.min.js" />
+    <EmbeddedResource Include="Web\css\bootstrap.min.css" />
+    <EmbeddedResource Include="Web\fonts\glyphicons-halflings-regular.eot" />
+    <EmbeddedResource Include="Web\fonts\glyphicons-halflings-regular.svg" />
+    <EmbeddedResource Include="Web\fonts\glyphicons-halflings-regular.ttf" />
+    <EmbeddedResource Include="Web\fonts\glyphicons-halflings-regular.woff" />
+    <EmbeddedResource Include="Web\js\bootstrap.min.js" />
+    <EmbeddedResource Include="Log4Net.config" />
+  </ItemGroup>
+</Project>

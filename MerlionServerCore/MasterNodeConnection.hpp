@@ -1,0 +1,144 @@
+#pragma once
+
+#include <boost/asio.hpp>
+#include <memory>
+#include <mutex>
+#include <list>
+#include "Logging.hpp"
+
+namespace mcore
+{
+    class Master;
+	class MasterNode;
+    class MasterNodeConnectionHandler;
+
+    class MasterNodeConnection :
+            public std::enable_shared_from_this<MasterNodeConnection>
+    {
+    public:
+        using socketType = boost::asio::ip::tcp::socket;
+        using ioMutexType = std::recursive_mutex;
+    private:
+        friend class Master;
+        Master&_master;
+        std::list<std::shared_ptr<MasterNodeConnection>>::iterator iter;
+		TypedLogger<MasterNodeConnection> log;
+		
+        boost::asio::io_service& service;
+        bool accepted;
+        volatile bool disposed;
+
+        std::shared_ptr<socketType> socket;
+        std::shared_ptr<boost::asio::buffered_stream<socketType>> stream;
+
+        std::shared_ptr<MasterNodeConnectionHandler> handler;
+
+        ioMutexType mutex;
+
+
+    public:
+        MasterNodeConnection(Master& master);
+        ~MasterNodeConnection();
+
+        Master& master() const { return _master; }
+		
+		// tired to add "nodes" to Master:)
+		std::shared_ptr<MasterNode> masterNode();
+
+        void didAccept();
+        void shutdown();
+		
+		void setChannelName(const std::string&); // For logging
+
+        void performShutdownByError(const std::exception&);
+
+        socketType& tcpSocket();
+        template <class Buffer, class Callback>
+        void readAsync(const Buffer& buffer, Callback cb)
+        {
+            std::lock_guard<ioMutexType> lock(mutex);
+            auto self = shared_from_this();
+            async_read(tcpSocket(), buffer,
+            [self, cb]
+            (const boost::system::error_code& error, std::size_t readCount) {
+                std::lock_guard<ioMutexType> lock(self->mutex);
+
+                if (self->disposed || error == boost::asio::error::operation_aborted) {
+                    return;
+                }
+
+                cb(error, readCount);
+            });
+		}
+
+        template <class Buffer, class Callback>
+        void writeAsync(const Buffer& buffer, Callback cb)
+        {
+            std::lock_guard<ioMutexType> lock(mutex);
+            auto self = shared_from_this();
+            async_write(tcpSocket(), buffer,
+            [self, cb]
+                    (const boost::system::error_code& error, std::size_t readCount) {
+                std::lock_guard<ioMutexType> lock(self->mutex);
+
+                if (self->disposed || error == boost::asio::error::operation_aborted) {
+                    return;
+                }
+
+                cb(error, readCount);
+            });
+		}
+		
+		// For compatibility with AsyncPipe.hpp
+		template <class Buffer, class Callback>
+		void async_read_some(const Buffer& buffer, Callback cb)
+		{
+			std::lock_guard<ioMutexType> lock(mutex);
+			auto self = shared_from_this();
+			tcpSocket().async_read_some(buffer,
+			[self, cb]
+			(const boost::system::error_code& error, std::size_t readCount) mutable {
+				std::lock_guard<ioMutexType> lock(self->mutex);
+				
+				if (self->disposed || error == boost::asio::error::operation_aborted) {
+					return;
+				}
+				
+				cb(error, readCount);
+			});
+		}
+		template <class Buffer, class Callback>
+		void async_write_some(const Buffer& buffer, Callback cb)
+		{
+			std::lock_guard<ioMutexType> lock(mutex);
+			auto self = shared_from_this();
+			tcpSocket().async_write_some(buffer,
+			[self, cb]
+			(const boost::system::error_code& error, std::size_t readCount) mutable {
+				std::lock_guard<ioMutexType> lock(self->mutex);
+				
+				if (self->disposed || error == boost::asio::error::operation_aborted) {
+					return;
+				}
+				
+				cb(error, readCount);
+			});
+		}
+
+        ioMutexType& ioMutex() { return mutex; }
+        bool isDisposed() const { return disposed; }
+
+        bool isBuffered() const { return stream != nullptr; }
+        void enableBuffering();
+    };
+
+    class MasterNodeConnectionHandler
+    {
+    public:
+        virtual ~MasterNodeConnectionHandler() { }
+        virtual void service() = 0;
+        virtual void connectionShutdown() { }
+        virtual void connectionShutdownDone() { }
+    };
+
+}
