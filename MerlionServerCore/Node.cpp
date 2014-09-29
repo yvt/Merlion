@@ -154,13 +154,35 @@ namespace mcore
 			path = _parameters.getPackageDownloadPathFunction(version);
 		});
 		versionLoader->onVersionDownloaded.connect([=](const std::string &version) {
+			// Deploy
+			try {
+				_parameters.deployPackageFunction(version);
+			} catch(...) {
+				BOOST_LOG_SEV(log, LogLevel::Error) <<
+				format("Failed to deploy version '%s'.: ") % version
+				<< boost::current_exception_diagnostic_information();
+				
+				std::lock_guard<std::recursive_mutex> lock(socketMutex);
+				versionsToLoad.erase(version);
+				return;
+			}
+			
+			BOOST_LOG_SEV(log, LogLevel::Info) <<
+			format("Deployed version '%s'.: ") % version;
+			
 			std::lock_guard<std::recursive_mutex> lock(socketMutex);
 			
 			// No longer needed?
 			if (versionsToLoad.find(version) == versionsToLoad.end())
 				return;
 			
-			loadDomainIfNotLoaded(version);
+			try {
+				loadDomainIfNotLoaded(version);
+			} catch (...) {
+				BOOST_LOG_SEV(log, LogLevel::Error) <<
+				format("Failed to load version '%s'.: ") % version <<
+				boost::current_exception_diagnostic_information();
+			}
 		});
 		versionLoader->onVersionDownloadFailed.connect([=](const std::string& version) {
 			std::lock_guard<std::recursive_mutex> lock(socketMutex);
