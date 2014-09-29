@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8.4)
 project(MerlionServerCore)
 
-find_package(Boost 1.50.0 REQUIRED COMPONENTS system regex thread)
+find_package(Boost 1.55.0 REQUIRED COMPONENTS system regex thread log filesystem)
 include_directories(${Boost_INCLUDE_DIRS})
 list(APPEND LIB_LIST ${Boost_LIBRARIES})
 
