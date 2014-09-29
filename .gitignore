@@ -161,6 +161,7 @@ xcuserdata
 #!xcuserdata/
 #*.xcuserstate
 UserInterfaceState.xcuserstate
+*xcshareddata*
 
 # Vim & Sublime Text
 *~
