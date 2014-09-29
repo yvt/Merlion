@@ -6,6 +6,7 @@
 #include "Protocol.hpp"
 #include "NodeClient.hpp"
 #include "NodeDomain.hpp"
+#include "NodeVersionLoader.hpp"
 
 namespace asio = boost::asio;
 using boost::format;
@@ -133,6 +134,38 @@ namespace mcore
 		BOOST_LOG_SEV(log, LogLevel::Info) << "Starting as '" << parameters.nodeName << "'.";
 		
 		info.nodeName = parameters.nodeName;
+		versionLoader = std::make_shared<NodeVersionLoader>(endpoint);
+		
+		versionLoader->onVersionAboutToBeDownloaded.connect([=](const std::string &version, bool &cancel) {
+			std::lock_guard<std::recursive_mutex> lock(socketMutex);
+			
+			// No longer needed?
+			if (versionsToLoad.find(version) == versionsToLoad.end())
+				cancel = true;
+			
+			// Already downloaded?
+			auto path = _parameters.getPackagePathFunction(version);
+			if (boost::filesystem::exists(path)) {
+				cancel = true;
+				loadDomainIfNotLoaded(version);
+			}
+		});
+		versionLoader->onNeedsDownloadFileName.connect([=](const std::string &version, std::string &path) {
+			path = _parameters.getPackageDownloadPathFunction(version);
+		});
+		versionLoader->onVersionDownloaded.connect([=](const std::string &version) {
+			std::lock_guard<std::recursive_mutex> lock(socketMutex);
+			
+			// No longer needed?
+			if (versionsToLoad.find(version) == versionsToLoad.end())
+				return;
+			
+			loadDomainIfNotLoaded(version);
+		});
+		versionLoader->onVersionDownloadFailed.connect([=](const std::string& version) {
+			std::lock_guard<std::recursive_mutex> lock(socketMutex);
+			versionsToLoad.erase(version);
+		});
 		
 		connectAsync();
 	}
@@ -147,6 +180,9 @@ namespace mcore
 		if (_library == nullptr) {
 			return;
 		}
+		
+		versionLoader->shutdown();
+		versionLoader.reset();
 		
 		std::lock_guard<std::recursive_mutex> lock(socketMutex);
 		shutdown();
@@ -362,13 +398,9 @@ namespace mcore
 								}
 								auto path = _parameters.getPackagePathFunction(version);
 								if (boost::filesystem::exists(path)) {
-									_parameters.loadVersionFunction(version);
-									domains.emplace(version, std::make_shared<NodeDomain>(*this, version));
-									domains[version]->setAcceptsClient(true);
+									loadDomainIfNotLoaded(version);
 								} else {
-									// TODO: download version!
-									//       current code assumes version is already downloaded.
-									MSCThrow(NotImplementedException("Downloading application is not implemented."));
+									versionsToLoad.insert(version);
 								}
 							} catch (...) {
 								BOOST_LOG_SEV(log, LogLevel::Error) <<
@@ -507,6 +539,20 @@ namespace mcore
 		if (down)
 			return;
 		sendUnbindRoom(room);
+	}
+	
+	void Node::loadDomainIfNotLoaded(const std::string &version)
+	{
+		std::lock_guard<std::recursive_mutex> lock(socketMutex);
+		
+		if (domains.find(version) != domains.end())
+			return;
+		
+		_parameters.loadVersionFunction(version);
+		domains.emplace(version, std::make_shared<NodeDomain>(*this, version));
+		domains[version]->setAcceptsClient(true);
+		
+		versionsToLoad.erase(version);
 	}
 	
 	Node::~Node()

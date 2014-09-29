@@ -21,6 +21,7 @@ MasterClient.cpp
 Node.cpp
 NodeDomain.cpp
 NodeClient.cpp
+NodeVersionLoader.cpp
 Utils.cpp
 Packet.cpp
 Logging.cpp

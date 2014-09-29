@@ -43,9 +43,10 @@
 		E833F55319D7045F00B003C0 /* libboost_filesystem.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = E833F55219D7045F00B003C0 /* libboost_filesystem.dylib */; };
 		E833F55619D70F8500B003C0 /* NodeDomain.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E833F55419D70F8500B003C0 /* NodeDomain.cpp */; };
 		E833F55719D70F8500B003C0 /* NodeDomain.hpp in Headers */ = {isa = PBXBuildFile; fileRef = E833F55519D70F8500B003C0 /* NodeDomain.hpp */; };
-		E833F55919D710B300B003C0 /* libboost_signals.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = E833F55819D710B300B003C0 /* libboost_signals.dylib */; };
 		E833F55C19D7114000B003C0 /* NodeClient.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E833F55A19D7114000B003C0 /* NodeClient.cpp */; };
 		E833F55D19D7114000B003C0 /* NodeClient.hpp in Headers */ = {isa = PBXBuildFile; fileRef = E833F55B19D7114000B003C0 /* NodeClient.hpp */; };
+		E875629719D9418B0047D1AE /* NodeVersionLoader.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E875629519D9418B0047D1AE /* NodeVersionLoader.cpp */; };
+		E875629819D9418B0047D1AE /* NodeVersionLoader.hpp in Headers */ = {isa = PBXBuildFile; fileRef = E875629619D9418B0047D1AE /* NodeVersionLoader.hpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -99,6 +100,8 @@
 		E833F55819D710B300B003C0 /* libboost_signals.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libboost_signals.dylib; path = "../../../../../usr/local/boost-1.56.0-i386/lib/libboost_signals.dylib"; sourceTree = "<group>"; };
 		E833F55A19D7114000B003C0 /* NodeClient.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = NodeClient.cpp; sourceTree = "<group>"; };
 		E833F55B19D7114000B003C0 /* NodeClient.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = NodeClient.hpp; sourceTree = "<group>"; };
+		E875629519D9418B0047D1AE /* NodeVersionLoader.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = NodeVersionLoader.cpp; sourceTree = "<group>"; };
+		E875629619D9418B0047D1AE /* NodeVersionLoader.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = NodeVersionLoader.hpp; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -106,7 +109,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E833F55919D710B300B003C0 /* libboost_signals.dylib in Frameworks */,
 				E833F55319D7045F00B003C0 /* libboost_filesystem.dylib in Frameworks */,
 				E833F54E19D550C500B003C0 /* libboost_log_setup.dylib in Frameworks */,
 				E833F54F19D550C500B003C0 /* libboost_log.dylib in Frameworks */,
@@ -172,6 +174,8 @@
 				E833F55519D70F8500B003C0 /* NodeDomain.hpp */,
 				E833F55A19D7114000B003C0 /* NodeClient.cpp */,
 				E833F55B19D7114000B003C0 /* NodeClient.hpp */,
+				E875629519D9418B0047D1AE /* NodeVersionLoader.cpp */,
+				E875629619D9418B0047D1AE /* NodeVersionLoader.hpp */,
 				E833F54819D54B0400B003C0 /* Logging.cpp */,
 				E833F54919D54B0400B003C0 /* Logging.hpp */,
 				E833F50919D4489400B003C0 /* Packet.cpp */,
@@ -209,6 +213,7 @@
 			files = (
 				E833F55719D70F8500B003C0 /* NodeDomain.hpp in Headers */,
 				E833F51D19D4489400B003C0 /* Packet.hpp in Headers */,
+				E875629819D9418B0047D1AE /* NodeVersionLoader.hpp in Headers */,
 				E833F51919D4489400B003C0 /* MasterNode.hpp in Headers */,
 				E833F51E19D4489400B003C0 /* Protocol.hpp in Headers */,
 				E833F51F19D4489400B003C0 /* Public.h in Headers */,
@@ -285,6 +290,7 @@
 			files = (
 				E833F53419D462D800B003C0 /* MasterNodeClientStream.cpp in Sources */,
 				E833F51619D4489400B003C0 /* MasterClient.cpp in Sources */,
+				E875629719D9418B0047D1AE /* NodeVersionLoader.cpp in Sources */,
 				E833F51A19D4489400B003C0 /* MasterNodeConnection.cpp in Sources */,
 				E833F55619D70F8500B003C0 /* NodeDomain.cpp in Sources */,
 				E833F55C19D7114000B003C0 /* NodeClient.cpp in Sources */,

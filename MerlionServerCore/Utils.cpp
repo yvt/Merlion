@@ -32,7 +32,8 @@ namespace mcore
             boost::asio::ip::tcp::resolver::query query(addressPart, std::string());
 
             auto result = resolver.resolve(query);
-            for (;result != boost::asio::ip::tcp::resolver::iterator(); ++result) {
+			// Return the first one
+            for (;result != boost::asio::ip::tcp::resolver::iterator();) {
                 auto address = result->endpoint().address();
                 return std::make_pair(address, port);
             }

@@ -31,6 +31,7 @@ namespace mcore
 	
 	class NodeDomain;
 	class NodeClient;
+	class NodeVersionLoader;
 	
 	class Node: boost::noncopyable, LibraryListener
 	{
@@ -44,6 +45,9 @@ namespace mcore
 		boost::asio::ip::tcp::socket socket;
 		std::recursive_mutex socketMutex;
 		volatile bool down;
+		
+		std::unordered_set<std::string> versionsToLoad;
+		std::shared_ptr<NodeVersionLoader> versionLoader;
 		
 		boost::asio::deadline_timer timeoutTimer;
 		boost::asio::deadline_timer reconnectTimer;
@@ -62,6 +66,8 @@ namespace mcore
 		void sendHeader();
 		void receiveCommandHeader();
 		void receiveCommandBody(std::size_t);
+		
+		void loadDomainIfNotLoaded(const std::string&);
 		
 		template <class F>
 		void sendCommand(const std::string& name, F gen);
