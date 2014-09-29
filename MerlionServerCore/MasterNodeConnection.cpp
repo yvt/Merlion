@@ -30,7 +30,7 @@ namespace mcore
 	std::shared_ptr<MasterNode> MasterNodeConnection::masterNode()
 	{
 		std::lock_guard<ioMutexType> lock(mutex);
-		auto ret = std::dynamic_pointer_cast<MasterNode>(handler);
+		auto ret = std::dynamic_pointer_cast<MasterNode>(handler.lock());
 		if (ret != nullptr && !ret->isConnected())
 			ret.reset();
 		return ret;
@@ -78,21 +78,23 @@ namespace mcore
                 }
 
                 std::uint32_t header = *headerBuffer;
-
+				std::shared_ptr<MasterNodeConnectionHandler> h;
+				
                 if (header == ControlStreamHeaderMagic) {
-                    handler = std::make_shared<MasterNode>(*this);
+                    h = std::make_shared<MasterNode>(shared_from_this());
                 } else if (header == VersionDownloadRequestMagic) {
                     MSCThrow(NotImplementedException());
 				} else if (header == DataStreamMagic) {
-					handler = std::make_shared<MasterNodeClientStream>(*this);
+					h = std::make_shared<MasterNodeClientStream>(shared_from_this());
                 } else {
                     MSCThrow(InvalidOperationException(
                             str(format("Invalid header magic 0x%08x received.") % header)));
                 }
 
-                assert(handler != nullptr);
+                assert(h != nullptr);
+				handler = h;
 
-				handler->service();
+				h->service();
 
             } catch (std::exception& ex) {
                 performShutdownByError(ex);
@@ -121,14 +123,15 @@ namespace mcore
 		
 		BOOST_LOG_SEV(log, LogLevel::Info) << "Shutting down.";
 		
-        if (handler != nullptr)
-            handler->connectionShutdown();
+		auto h = handler.lock();
+        if (h != nullptr)
+            h->connectionShutdown();
 
 		try { tcpSocket().shutdown(socketType::shutdown_both); } catch(...) { }
         tcpSocket().cancel();
 
-        if (handler != nullptr)
-            handler->connectionShutdownDone();
+        if (h != nullptr)
+            h->connectionShutdownDone();
 
         if (accepted) {
             _master.removeNodeConnection(iter);

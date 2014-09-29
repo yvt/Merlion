@@ -13,12 +13,12 @@ namespace mcore
 	{
 		TypedLogger<MasterNodeClientStream> log;
 		
-		MasterNodeConnection& connection;
+		std::shared_ptr<MasterNodeConnection> connection;
 		std::shared_ptr<MasterClient> client;
 		
 		void shutdown();
 	public:
-		MasterNodeClientStream(MasterNodeConnection& connection);
+		MasterNodeClientStream(const std::shared_ptr<MasterNodeConnection>& connection);
 		~MasterNodeClientStream();
 		
 		void service() override;

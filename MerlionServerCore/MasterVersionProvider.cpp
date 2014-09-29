@@ -8,7 +8,7 @@ using boost::format;
 
 namespace mcore
 {
-	MasterVersionProvider::MasterVersionProvider(MasterNodeConnection& connection):
+	MasterVersionProvider::MasterVersionProvider(const MasterNodeConnection::ptr &connection):
 	connection(connection)
 	{
 		
@@ -21,24 +21,26 @@ namespace mcore
 	
 	void MasterVersionProvider::service()
 	{
+		auto self = shared_from_this();
 		getVersionStringLength();
 	}
 	
 	void MasterVersionProvider::getVersionStringLength()
 	{
 		// Read version name string length
+		auto self = shared_from_this();
 		auto buf = std::make_shared<std::uint32_t>();
-		connection.readAsync(asio::buffer(buf.get(), 4),
-		[this, buf](const boost::system::error_code &error, std::size_t)
+		connection->readAsync(asio::buffer(buf.get(), 4),
+		[this, self, buf](const boost::system::error_code &error, std::size_t)
 		{
 			if (error) {
-				connection.shutdown();
+				connection->shutdown();
 				return;
 			}
 			
 			std::size_t len = static_cast<std::size_t>(*buf);
 			if (len > 1024) {
-				connection.shutdown();
+				connection->shutdown();
 				return;
 			}
 			
@@ -49,13 +51,14 @@ namespace mcore
 	void MasterVersionProvider::getVersionString(std::size_t len)
 	{
 		// Read version name string length
+		auto self = shared_from_this();
 		auto buf = std::make_shared<std::vector<char>>();
 		buf->resize(len);
-		connection.readAsync(asio::buffer(buf->data(), buf->size()),
-		[this, buf](const boost::system::error_code &error, std::size_t)
+		connection->readAsync(asio::buffer(buf->data(), buf->size()),
+		[this, self, buf](const boost::system::error_code &error, std::size_t)
 		{
 			if (error) {
-				connection.shutdown();
+				connection->shutdown();
 				return;
 			}
 

@@ -11,12 +11,12 @@ using boost::format;
 
 namespace mcore
 {
-	MasterNodeClientStream::MasterNodeClientStream(MasterNodeConnection& connection):
+	MasterNodeClientStream::MasterNodeClientStream(const MasterNodeConnection::ptr &connection):
 	connection(connection)
 	{
 		std::string channel = "Unknown Client Data";
 		log.setChannel(channel);
-		connection.setChannelName(channel);
+		connection->setChannelName(channel);
 	}
 	
 	MasterNodeClientStream::~MasterNodeClientStream()
@@ -29,11 +29,11 @@ namespace mcore
 		// Read clientId
 		auto self = shared_from_this();
 		auto buf = std::make_shared<std::uint64_t>();
-		connection.readAsync(asio::buffer(buf.get(), 8),
+		connection->readAsync(asio::buffer(buf.get(), 8),
 		[this, self, buf](const boost::system::error_code &error, std::size_t)
 		{
 			if (error) {
-				connection.shutdown();
+				connection->shutdown();
 				return;
 			}
 			
@@ -41,22 +41,22 @@ namespace mcore
 			
 			std::string channel = str(format("Client:%d") % clientId);
 			log.setChannel(channel);
-			connection.setChannelName(channel);
+			connection->setChannelName(channel);
 			
-			client = connection.master().getClient(clientId);
+			client = connection->master().getClient(clientId);
 			
 			if (client == nullptr) {
 				BOOST_LOG_SEV(log, LogLevel::Debug) <<
 				"Client ID was not found.";
-				connection.shutdown();
+				connection->shutdown();
 				return;
 			}
 			
-			auto c = connection.shared_from_this();
+			auto c = connection;
 			
 			client->connectionApproved
 			([this, self, c](ssl::stream<ip::tcp::socket>& stream) {
-				startAsyncPipe(stream, connection, 4096, [this, self, c](const boost::system::error_code &error, std::uint64_t) {
+				startAsyncPipe(stream, *connection, 4096, [this, self, c](const boost::system::error_code &error, std::uint64_t) {
 					if (error) {
 						BOOST_LOG_SEV(log, LogLevel::Debug) <<
 						"Downstream error.: " << error;
@@ -66,7 +66,7 @@ namespace mcore
 				   }
 				   shutdown();
 			   });
-				startAsyncPipe(connection, stream, 4096, [this, self, c](const boost::system::error_code &error, std::uint64_t) {
+				startAsyncPipe(*connection, stream, 4096, [this, self, c](const boost::system::error_code &error, std::uint64_t) {
 					if (error) {
 						BOOST_LOG_SEV(log, LogLevel::Debug) <<
 						"Upstream error.: " << error;
@@ -97,6 +97,6 @@ namespace mcore
 			client.reset();
 		}
 		
-		connection.shutdown();
+		connection->shutdown();
 	}
 }

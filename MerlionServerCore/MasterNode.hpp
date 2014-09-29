@@ -11,12 +11,14 @@ namespace mcore
 {
     class Master;
     
-    class MasterNode: public MasterNodeConnectionHandler, MasterListener
+    class MasterNode:
+	public MasterNodeConnectionHandler, MasterListener,
+	public std::enable_shared_from_this<MasterNode>
     {
 		TypedLogger<MasterNode> log;
         std::list<std::shared_ptr<MasterNode>>::iterator iter;
 
-        MasterNodeConnection& connection;
+		std::shared_ptr<MasterNodeConnection> connection;
         NodeInfo _nodeInfo;
 
         PacketGenerator sendBuffer;
@@ -49,7 +51,7 @@ namespace mcore
 		void addClient(const std::string& version, std::uint64_t);
 		
     public:
-        MasterNode(MasterNodeConnection&);
+		MasterNode(const std::shared_ptr<MasterNodeConnection>&);
         ~MasterNode();
 
         Master& master();

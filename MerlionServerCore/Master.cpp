@@ -319,6 +319,18 @@ namespace mcore
     {
         invalidate();
     }
+	
+	void Master::addNode(const std::shared_ptr<MasterNode>& node)
+	{
+		std::lock_guard<std::recursive_mutex> lock(nodesMutex);
+		nodes[node.get()] = node;
+	}
+	
+	void Master::removeNode(MasterNode *node)
+	{
+		std::lock_guard<std::recursive_mutex> lock(nodesMutex);
+		nodes.erase(node);
+	}
 
     void Master::addVersion(const std::string &name)
     {
@@ -371,12 +383,9 @@ namespace mcore
 	{
 		std::vector<std::shared_ptr<MasterNode>> ret;
 		
-		std::lock_guard<std::recursive_mutex> lock(nodeConnectionsMutex);
-		for (const std::shared_ptr<MasterNodeConnection>& c: nodeConnections) {
-			auto node = c->masterNode();
-			if (node != nullptr) {
-				ret.push_back(std::move(node));
-			}
+		std::lock_guard<std::recursive_mutex> lock(nodesMutex);
+		for (const auto& e: nodes) {
+			ret.push_back(e.second);
 		}
 		
 		return ret;
@@ -392,34 +401,36 @@ namespace mcore
 			std::lock_guard<std::recursive_mutex> lock(nodeConnectionsMutex);
 			std::lock_guard<std::recursive_mutex> lock2(nodeThrottlesMutex);
 			std::lock_guard<std::recursive_mutex> lock3(versionsMutex);
-			for (const std::shared_ptr<MasterNodeConnection>& c: nodeConnections) {
-				auto node = c->masterNode();
-				if (node != nullptr) {
-					auto it = nodeThrottles.find(node->nodeInfo().nodeName);
-					if (it == nodeThrottles.end())
+			for (const auto& c: nodes) {
+				auto node = c.second;
+				if (!node->isConnected())
+					continue;
+				
+				auto it = nodeThrottles.find(node->nodeInfo().nodeName);
+				BOOST_LOG_SEV(log, LogLevel::Debug) <<node->nodeInfo().nodeName;
+				if (it == nodeThrottles.end())
+					continue;
+				
+				double nodeThrottle = it->second;
+				if (nodeThrottle == 0.0)
+					continue;
+				
+				for (const auto& domain: node->domainStatuses()) {
+					auto it2 = versions.find(domain.versionName);
+					if (it2 == versions.end())
 						continue;
 					
-					double nodeThrottle = it->second;
-					if (nodeThrottle == 0.0)
+					double versionThrottle = it2->second.throttle;
+					if (versionThrottle == 0.0)
 						continue;
 					
-					for (const auto& domain: node->domainStatuses()) {
-						auto it2 = versions.find(domain.versionName);
-						if (it2 == versions.end())
-							continue;
-						
-						double versionThrottle = it2->second.throttle;
-						if (versionThrottle == 0.0)
-							continue;
-						
-						Balancer<RetType>::Item item;
-						
-						item.key = RetType(node, domain.versionName);
-						item.current = static_cast<double>(domain.numClients);
-						item.desired = nodeThrottle * versionThrottle;
-						
-						items.emplace_back(std::move(item));
-					}
+					Balancer<RetType>::Item item;
+					
+					item.key = RetType(node, domain.versionName);
+					item.current = static_cast<double>(domain.numClients);
+					item.desired = nodeThrottle * versionThrottle;
+					
+					items.emplace_back(std::move(item));
 				}
 			}
 		}

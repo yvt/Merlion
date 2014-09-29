@@ -13,11 +13,13 @@ namespace mcore
     class MasterNodeConnectionHandler;
 
     class MasterNodeConnection :
-            public std::enable_shared_from_this<MasterNodeConnection>
+	public std::enable_shared_from_this<MasterNodeConnection>,
+	boost::noncopyable
     {
     public:
         using socketType = boost::asio::ip::tcp::socket;
         using ioMutexType = std::recursive_mutex;
+		using ptr = std::shared_ptr<MasterNodeConnection>;
     private:
         friend class Master;
         Master&_master;
@@ -31,7 +33,7 @@ namespace mcore
         std::shared_ptr<socketType> socket;
         std::shared_ptr<boost::asio::buffered_stream<socketType>> stream;
 
-        std::shared_ptr<MasterNodeConnectionHandler> handler;
+        std::weak_ptr<MasterNodeConnectionHandler> handler;
 
         ioMutexType mutex;
 

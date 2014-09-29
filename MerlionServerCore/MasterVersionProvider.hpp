@@ -6,15 +6,16 @@ namespace mcore
 {
 	class MasterVersionProvider :
 	public MasterNodeConnectionHandler,
-	public std::enable_shared_from_this<MasterVersionProvider>
+	public std::enable_shared_from_this<MasterVersionProvider>,
+	boost::noncopyable
 	{
-		MasterNodeConnection& connection;
+		std::shared_ptr<MasterNodeConnection> connection;
 		
 		void getVersionStringLength();
 		void getVersionString(std::size_t);
 		
 	public:
-		MasterVersionProvider(MasterNodeConnection& connection);
+		MasterVersionProvider(const std::shared_ptr<MasterNodeConnection> &connection);
 		~MasterVersionProvider();
 		
 		void service() override;

@@ -12,14 +12,14 @@ using boost::format;
 namespace mcore
 {
 
-    MasterNode::MasterNode(MasterNodeConnection &connection):
+	MasterNode::MasterNode(const MasterNodeConnection::ptr&connection):
         connection(connection),
         connected(false),
         sendReady(true)
 	{
-		auto channel = str(format("Unknown Node [%s]") % connection.tcpSocket().remote_endpoint());
+		auto channel = str(format("Unknown Node [%s]") % connection->tcpSocket().remote_endpoint());
 		log.setChannel(channel);
-		connection.setChannelName(channel);
+		connection->setChannelName(channel);
 		
 		// Placeholder for packet size
 		sendBuffer.write<std::uint32_t>(0);
@@ -28,21 +28,24 @@ namespace mcore
     MasterNode::~MasterNode()
     {
         master().removeListener(this);
+		connection->shutdown();
     }
 
     Master& MasterNode::master()
     {
-        return connection.master();
+        return connection->master();
     }
 
     void MasterNode::service()
     {
-        connection.enableBuffering();
+        connection->enableBuffering();
+		
 
+		auto self = shared_from_this();
         auto headerBuffer = std::make_shared<std::uint32_t>(0);
 
-        connection.readAsync(asio::buffer(headerBuffer.get(), 4),
-        [this, headerBuffer]
+        connection->readAsync(asio::buffer(headerBuffer.get(), 4),
+        [this, self, headerBuffer]
         (const boost::system::error_code& error, std::size_t readCount){
             try {
                 if (error) {
@@ -56,18 +59,19 @@ namespace mcore
 
                 receiveHeader(dataSize);
             } catch (std::exception& ex) {
-                connection.performShutdownByError(ex);
+                connection->performShutdownByError(ex);
             }
         });
     }
 
     void MasterNode::receiveHeader(std::size_t size)
-    {
+	{
+		auto self = shared_from_this();
         auto headerBuffer = std::make_shared<std::vector<char>>();
         headerBuffer->resize(size);
 
-        connection.readAsync(asio::buffer(headerBuffer->data(), size),
-        [this, headerBuffer]
+        connection->readAsync(asio::buffer(headerBuffer->data(), size),
+        [this, self, headerBuffer]
         (const boost::system::error_code& error, std::size_t readCount){
             try {
                 if (error) {
@@ -77,9 +81,9 @@ namespace mcore
                 PacketReader reader(headerBuffer->data(), readCount);
                 _nodeInfo.deserialize(reader);
 				
-				auto channel = str(format("Node:%s [%s]") % _nodeInfo.nodeName % connection.tcpSocket().remote_endpoint());
+				auto channel = str(format("Node:%s [%s]") % _nodeInfo.nodeName % connection->tcpSocket().remote_endpoint());
 				log.setChannel(channel);
-				connection.setChannelName(channel);
+				connection->setChannelName(channel);
 				
 				BOOST_LOG_SEV(log, LogLevel::Info) << "Connected. Requesting to load versions.";
 
@@ -90,24 +94,26 @@ namespace mcore
                     sendLoadVersion(ver, false);
                 flushSendBuffer();
 
-                master().addListener(this);
+				master().addListener(this);
+				master().addNode(shared_from_this());
 
                 connected = true;
 				
 				BOOST_LOG_SEV(log, LogLevel::Info) << "Started receiving commands.";
                 receiveCommand();
             } catch (std::exception& ex) {
-                connection.performShutdownByError(ex);
+                connection->performShutdownByError(ex);
             }
         });
     }
 
     void MasterNode::receiveCommand()
-    {
+	{
+		auto self = shared_from_this();
         auto sizeBuffer = std::make_shared<std::uint32_t>();
 
-        connection.readAsync(asio::buffer(sizeBuffer.get(), 4),
-        [this, sizeBuffer]
+        connection->readAsync(asio::buffer(sizeBuffer.get(), 4),
+        [this, self, sizeBuffer]
         (const boost::system::error_code& error, std::size_t readCount){
             try {
                 if (error) {
@@ -122,18 +128,19 @@ namespace mcore
 
                 receiveCommandBody(dataSize);
             } catch (std::exception& ex) {
-                connection.performShutdownByError(ex);
+                connection->performShutdownByError(ex);
             }
         });
     }
 
     void MasterNode::receiveCommandBody(std::size_t size)
-    {
+	{
+		auto self = shared_from_this();
         auto cmdBuffer = std::make_shared<std::vector<char>>();
         cmdBuffer->resize(size);
 
-        connection.readAsync(asio::buffer(cmdBuffer->data(), size),
-        [this, cmdBuffer]
+        connection->readAsync(asio::buffer(cmdBuffer->data(), size),
+        [this, self, cmdBuffer]
         (const boost::system::error_code& error, std::size_t readCount){
             try {
                 if (error) {
@@ -216,13 +223,14 @@ namespace mcore
 
                 receiveCommand();
             } catch (std::exception& ex) {
-                connection.performShutdownByError(ex);
+                connection->performShutdownByError(ex);
             }
         });
     }
 
     void MasterNode::sendLoadVersion(const std::string& version, bool flush)
-    {
+	{
+		auto self = shared_from_this();
         std::lock_guard<std::recursive_mutex> lock(sendMutex);
         sendBuffer.write(NodeCommand::LoadVersion);
         sendBuffer.writeString(version);
@@ -232,7 +240,8 @@ namespace mcore
     }
 
     void MasterNode::sendUnloadVersion(const std::string& version, bool flush)
-    {
+	{
+		auto self = shared_from_this();
         std::lock_guard<std::recursive_mutex> lock(sendMutex);
         sendBuffer.write(NodeCommand::UnloadVersion);
         sendBuffer.writeString(version);
@@ -245,6 +254,7 @@ namespace mcore
 										 const std::string &version,
 										 const std::string &room)
 	{
+		auto self = shared_from_this();
 		{
 			std::lock_guard<std::recursive_mutex> lock(sendMutex);
 			sendBuffer.write(NodeCommand::Connect);
@@ -263,14 +273,16 @@ namespace mcore
 	}
 
     void MasterNode::sendHeartbeat()
-    {
+	{
+		auto self = shared_from_this();
         std::lock_guard<std::recursive_mutex> lock(sendMutex);
         sendBuffer.write(NodeCommand::Nop);
             flushSendBuffer();
     }
 
     void MasterNode::flushSendBuffer()
-    {
+	{
+		auto self = shared_from_this();
         std::lock_guard<std::recursive_mutex> lock(sendMutex);
         if (!sendReady)
             return;
@@ -285,7 +297,7 @@ namespace mcore
 		static_cast<std::uint32_t>(sentData->size() - 4);
 		
         sendReady = false;
-        connection.writeAsync(asio::buffer(sentData->data(), sentData->size()),
+        connection->writeAsync(asio::buffer(sentData->data(), sentData->size()),
         [this] (const boost::system::error_code& error, std::size_t readCount) {
             try {
                 if (error) {
@@ -300,7 +312,7 @@ namespace mcore
                 }
 
             } catch (std::exception& ex) {
-                connection.performShutdownByError(ex);
+                connection->performShutdownByError(ex);
             }
         });
     }
@@ -316,9 +328,12 @@ namespace mcore
     }
 
     void MasterNode::connectionShutdown()
-    {
+	{
+		auto self = shared_from_this();
+		
 		connected = false;
         master().removeListener(this);
+		master().removeNode(this);
     }
 
     void MasterNode::heartbeat(Master &param)
