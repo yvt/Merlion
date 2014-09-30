@@ -90,20 +90,17 @@ namespace mcore
 				
 				_room = reader.readString();
 				
+				std::shared_ptr<MasterClientResponse> resp(new MasterClientResponse(shared_from_this()));
+				
 				// Request a node to start a connection.
 				timeoutTimer.expires_from_now(boost::posix_time::seconds(5));
-				timeoutTimer.async_wait([this, self](const boost::system::error_code& error) {
+				timeoutTimer.async_wait([resp](const boost::system::error_code& error) {
 					if (error)
 						return;
 					
-					BOOST_LOG_SEV(log, LogLevel::Debug) << "Timed out. Disconnecting.";
-					respondStatus(ClientResponse::ServerFull,
-								  [this, self](const boost::system::error_code&) {
-									  shutdown();
-								  });
+					resp->reject("Timed out.");
 				});
 				
-				std::shared_ptr<MasterClientResponse> resp(new MasterClientResponse(shared_from_this()));
 				onNeedsResponse(resp);
 				
 				// Wait for response...
