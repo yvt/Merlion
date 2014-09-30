@@ -10,7 +10,8 @@
 namespace mcore
 {
     class Master;
-    
+	class MasterClientResponse;
+	
     class MasterNode:
 	public MasterNodeConnectionHandler, MasterListener,
 	public std::enable_shared_from_this<MasterNode>
@@ -28,7 +29,7 @@ namespace mcore
         struct Domain
         {
             std::string versionName;
-            std::unordered_set<std::uint64_t> clients;
+			std::unordered_map<std::uint64_t, std::shared_ptr<MasterClient>> clients;
             std::unordered_set<std::string> rooms;
         };
         std::unordered_map<std::string, Domain> domains;
@@ -70,6 +71,9 @@ namespace mcore
 			std::size_t numRooms;
 		};
 		std::vector<DomainStatus> domainStatuses();
+		
+		void acceptClient(const std::shared_ptr<MasterClientResponse>& response,
+						  const std::string& version);
 		
 		void removeClient(std::uint64_t);
 

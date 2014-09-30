@@ -25,6 +25,28 @@ namespace mcore
         serializeDictionary(buffer, dic);
         return buffer;
     }
-
+	
+	class CountingCombiner
+	{
+	public:
+		using result_type = std::size_t;
+		
+		template <class Iterator>
+		result_type operator()(Iterator first, Iterator last) const
+		{
+			std::size_t count = 0;
+			while (first != last)
+			{
+				try
+				{
+					*first;
+				}
+				catch(const boost::signals2::expired_slot &) {}
+				++first;
+				++count;
+			}
+			return count;
+		}
+	};
 }
 

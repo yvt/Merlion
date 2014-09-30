@@ -159,16 +159,15 @@ namespace mcore
 					case MasterCommand::RejectClient:
 						{
 							auto clientId = reader.read<std::uint64_t>();
-							auto cli = master().getClient(clientId);
 							
-							if (cli) {
-								cli->connectionRejected();
-							} else {
+							auto req = master().dequePendingClient(clientId);
+							if (req == boost::none) {
 								BOOST_LOG_SEV(log, LogLevel::Debug)
 								<< format("Requested to reject client #%d that doesn't exist.") % clientId;
+								break;
 							}
 							
-							removeClient(clientId);
+							req->response->reject(std::string());
 							break;
 						}
 
@@ -264,12 +263,6 @@ namespace mcore
 			
 			flushSendBuffer();
 		}
-		{
-			std::lock_guard<std::recursive_mutex> lock(domainsMutex);
-			auto it = domains.find(version);
-			if (it != domains.end())
-				it->second.clients.insert(clientId);
-		}
 	}
 
     void MasterNode::sendHeartbeat()
@@ -317,6 +310,14 @@ namespace mcore
         });
     }
 
+	void MasterNode::acceptClient(const std::shared_ptr<MasterClientResponse> &response,
+								  const std::string &version)
+	{
+		auto client = response->client();
+		
+		sendClientConnected(client->id(), version, client->room());
+	}
+	
     void MasterNode::versionAdded(Master &, const std::string &version)
     {
         sendLoadVersion(version);

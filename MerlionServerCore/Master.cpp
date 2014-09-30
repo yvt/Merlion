@@ -54,30 +54,6 @@ namespace mcore
 				return std::string();
 			return std::string(buffer.data());
 		};
-		
-		/*if (param.packageDownloadPathCallback == nullptr) {
-			MSCThrow(InvalidArgumentException("packageDownloadPathCallback"));
-		}
-		auto *packageDownloadPathCallback = param.packageDownloadPathCallback;
-		auto *packageDownloadPathCallbackData = param.packageDownloadPathCallbackUserData;
-		getPackageDownloadPathFunction = [=](const std::string& versionName) {
-			std::array<char, 512> buffer;
-			buffer[511] = 0;
-			if (packageDownloadPathCallback(versionName.c_str(), buffer.data(), 511, packageDownloadPathCallbackData) != 0)
-				return std::string();
-			return std::string(buffer.data());
-		};
-		
-		if (param.deployPackageCallback == nullptr) {
-			MSCThrow(InvalidArgumentException("deployPackageCallback"));
-		}
-		auto *deployPackageCallback = param.deployPackageCallback;
-		auto *deployPackageCallbackData = param.deployPackageCallbackUserData;
-		deployPackageFunction = [=](const std::string& versionName) {
-			if (deployPackageCallback(versionName.c_str(), deployPackageCallbackData)) {
-				MSCThrow(InvalidDataException("Deploying package failed."));
-			}
-		};*/
     }
 
     Master::Master(const std::shared_ptr<Library>& library, const MasterParameters& parameters):
@@ -243,12 +219,72 @@ namespace mcore
                     clients[conn->id()] = std::move(waitingClient);
                     waitingClient = std::make_shared<MasterClient>(*this, conn->id() + 1);
                 }
+				
+				conn->onNeedsResponse.connect([this, conn](const std::shared_ptr<MasterClientResponse>& r) {
+					// Use balancer to select a server.
+					auto domain = bindClientToDomain(conn->room());
+					 
+					if (domain == boost::none) {
+						r->reject("Could not find a suitable domain. Overload possible.");
+						return;
+					}
+					
+					auto version = domain->second;
+					
+					BOOST_LOG_SEV(log, LogLevel::Debug) <<
+					format("Bound client '%d' to '%s' at '%s'.") % conn->id() %
+					version % domain->first->nodeInfo().nodeName;
+					
+					// Make sure MasterClientResponse is in pendingClients
+					// until it is done
+					{
+						std::lock_guard<std::recursive_mutex> lock(pendingClientsMutex);
+						PendingClient pend;
+						pend.response = r;
+						pend.version = version;
+						pendingClients.emplace(r->client()->id(), std::move(pend));
+					}
+					
+					std::function<void(bool)> onResponded = [this, conn](bool) {
+						std::lock_guard<std::recursive_mutex> lock(pendingClientsMutex);
+						pendingClients.erase(conn->id());
+					};
+					
+					r->onResponded.connect(onResponded);
+					
+					if (r->isResponded()) {
+						onResponded(false);
+						return;
+					}
+					
+					// Let node process the response.
+					domain->first->acceptClient(r, version);
+				});
+				conn->onShutdown.connect([this, conn]() {
+					removeClient(conn->id());
+				});
                 conn->didAccept();
             }
 
             // Accept next connection
             acceptClientAsync(false);
         });
+	}
+	
+	boost::optional<Master::PendingClient>
+	Master::dequePendingClient(std::uint64_t clientId)
+	{
+		std::lock_guard<std::recursive_mutex> lock(pendingClientsMutex);
+		
+		auto it = pendingClients.find(clientId);
+		if (it == pendingClients.end()) {
+			return boost::none;
+		}
+		
+		auto ret = std::move(it->second);
+		pendingClients.erase(it);
+		
+		return std::move(ret);
 	}
 	
 	void Master::removeClient(std::uint64_t clientId)

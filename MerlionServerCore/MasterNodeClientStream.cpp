@@ -43,18 +43,20 @@ namespace mcore
 			log.setChannel(channel);
 			connection->setChannelName(channel);
 			
-			client = connection->master().getClient(clientId);
+			auto req = connection->master().dequePendingClient(clientId);
 			
-			if (client == nullptr) {
+			if (req == boost::none) {
 				BOOST_LOG_SEV(log, LogLevel::Debug) <<
-				"Client ID was not found.";
+				"Client ID was not found in the master pending client table.";
 				connection->shutdown();
 				return;
 			}
 			
+			client = req->response->client();
+			
 			auto c = connection;
 			
-			client->connectionApproved
+			req->response->accept
 			([this, self, c](ssl::stream<ip::tcp::socket>& stream) {
 				startAsyncPipe(stream, *connection, 4096, [this, self, c](const boost::system::error_code &error, std::uint64_t) {
 					if (error) {
@@ -79,7 +81,8 @@ namespace mcore
 			},
 			[this, self]() {
 				shutdown();
-			});
+			},
+			req->version);
 		});
 	}
 	

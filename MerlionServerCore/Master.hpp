@@ -19,6 +19,7 @@ namespace mcore
     class MasterNode;
     class MasterListener;
     class MasterClient;
+	class MasterClientResponse;
 
     struct MasterParameters
     {
@@ -42,6 +43,15 @@ namespace mcore
     class Master:
 	boost::noncopyable
     {
+	public:
+		struct PendingClient
+		{
+			std::string version;
+			std::shared_ptr<MasterClientResponse> response;
+		};
+		
+		
+	private:
         friend class MasterNodeConnection;
 		friend class MasterClient;
 
@@ -74,6 +84,9 @@ namespace mcore
         std::recursive_mutex clientsMutex;
 		void removeClient(std::uint64_t);
         void acceptClientAsync(bool initial);
+		
+		std::unordered_map<std::uint64_t, PendingClient> pendingClients;
+		std::recursive_mutex pendingClientsMutex;
 
         std::unordered_set<MasterListener *> listeners;
         std::recursive_mutex listenersMutex;
@@ -106,14 +119,14 @@ namespace mcore
 		
 		void addNode(const std::shared_ptr<MasterNode>&);
 		void removeNode(MasterNode *);
+		std::vector<std::shared_ptr<MasterNode>> getAllNodes();
 
         void addVersion(const std::string& name);
         void removeVersion(const std::string& name);
-        void setVersionThrottle(const std::string& name, double);
+		void setVersionThrottle(const std::string& name, double);
         std::vector<std::string> getAllVersionNames();
 		
-		std::vector<std::shared_ptr<MasterNode>> getAllNodes();
-		
+		boost::optional<PendingClient> dequePendingClient(std::uint64_t);
 		std::shared_ptr<MasterClient> getClient(std::uint64_t);
 		
 		void setNodeThrottle(const std::string& name, double);

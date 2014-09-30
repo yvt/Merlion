@@ -17,7 +17,6 @@ namespace mcore
 {
 
     MasterClient::MasterClient(Master& master, std::uint64_t id):
-            _master(master),
             clientId(id),
             service(master.library()->ioService()),
             sslContext(master.sslContext()),
@@ -89,22 +88,7 @@ namespace mcore
                     MSCThrow(InvalidDataException(str(format("Invalid header magic 0x%08x.") % magic)));
                 }
 				
-                auto room = reader.readString();
-				
-				// Use balancer to select a server.
-				auto domain = master().bindClientToDomain(room);
-				
-				if (domain == boost::none) {
-					BOOST_LOG_SEV(log, LogLevel::Warn) << "Could not find a suitable domain. Overload possible. Disconnecting.";
-					respondStatus(ClientResponse::ServerFull,
-					[this, self](const boost::system::error_code&) {
-						shutdown();
-					});
-					return;
-				}
-				
-				BOOST_LOG_SEV(log, LogLevel::Debug) <<
-				format("Bound to '%s' at '%s'.") % domain->second % domain->first->nodeInfo().nodeName;
+				_room = reader.readString();
 				
 				// Request a node to start a connection.
 				timeoutTimer.expires_from_now(boost::posix_time::seconds(5));
@@ -119,11 +103,10 @@ namespace mcore
 								  });
 				});
 				
-				version = domain->second;
-				domain->first->sendClientConnected(clientId,
-												   version, room);
+				std::shared_ptr<MasterClientResponse> resp(new MasterClientResponse(shared_from_this()));
+				onNeedsResponse(resp);
 				
-				// Node will call connectionApproved or connectionRejected...
+				// Wait for response...
 				
 			} catch (const InvalidDataException& ex) {
 				BOOST_LOG_SEV(log, LogLevel::Debug) << "Protocol error. Disconnecting.: " <<
@@ -150,16 +133,17 @@ namespace mcore
 		auto self = shared_from_this();
 		std::lock_guard<std::recursive_mutex> lock(mutex);
 		
-		BOOST_LOG_SEV(log, LogLevel::Info) << "Rejecting the client.";
+		BOOST_LOG_SEV(log, LogLevel::Warn) << "Rejecting the client.";
 		
-		respondStatus(ClientResponse::InternalServerError,
+		respondStatus(ClientResponse::ServerFull,
 					  [this, self](const boost::system::error_code&) {
 						  shutdown();
 					  });
 	}
 	
 	void MasterClient::connectionApproved(std::function<void(sslSocketType&)> onsuccess,
-										  std::function<void()> onfail)
+										  std::function<void()> onfail,
+										  const std::string& version)
 	{
 		
 		auto self = shared_from_this();
@@ -169,6 +153,8 @@ namespace mcore
 			onfail();
 			return;
 		}
+		
+		this->version = version;
 		
 		BOOST_LOG_SEV(log, LogLevel::Info) << "Connection approved.";
 		
@@ -209,12 +195,56 @@ namespace mcore
 		
 		BOOST_LOG_SEV(log, LogLevel::Debug) << "Shutting down.";
 		
-		master().removeClient(clientId);
+		onShutdown();
+		
 		try { sslSocket.shutdown(); } catch (...) { }
 		try { tcpSocket().shutdown(socketType::shutdown_both); } catch (...) { }
         tcpSocket().close();
 		
 		timeoutTimer.cancel();
     }
+	
+	MasterClientResponse::MasterClientResponse(const MasterClient::ptr &client):
+	_client(client)
+	{ }
+	
+	MasterClientResponse::~MasterClientResponse()
+	{
+		reject("No one responded to MasterClientResponse.");
+	}
+	
+	void MasterClientResponse::accept(std::function<void (MasterClient::sslSocketType &)> onsuccess,
+									  std::function<void ()> onfail,
+									  const std::string& version)
+	{
+		auto d = done.exchange(true);
+		if (d) {
+			onfail();
+			return;
+		}
+		_client->connectionApproved(onsuccess, onfail, version);
+		
+		onResponded(true);
+	}
+	
+	void MasterClientResponse::reject(const std::string& reason)
+	{
+		auto d = done.exchange(true);
+		if (d) {
+			return;
+		}
+		
+		BOOST_LOG_SEV(_client->log, LogLevel::Warn) <<
+		reason;
+		_client->connectionRejected();
+		
+		onResponded(false);
+	}
+	
+	bool MasterClientResponse::isResponded()
+	{
+		return done;
+	}
+	
 }
 
