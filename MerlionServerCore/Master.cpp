@@ -66,7 +66,8 @@ namespace mcore
             _sslContext(ssl::context::tlsv1),
             disposed(false)
 	{
-		auto pw = parameters.sslPassword;
+		// Setup SSL
+		std::string pw = parameters.sslPassword;
 		sslContext().set_password_callback([pw](std::size_t, ssl::context::password_purpose) { return pw; });
 		
 		try {
@@ -91,16 +92,23 @@ namespace mcore
 						"private key file: %s") %
 				 parameters.sslPrivateKeyFile % ex.what())));
 		}
-        waitingNodeConnection = std::make_shared<MasterNodeConnection>(*this);
-        waitingClient = std::make_shared<MasterClient>(*this, 1);
+		
+		BOOST_LOG_SEV(log, LogLevel::Debug) << "SSL is ready.";
 
         // Ensure Master is not destroyed until async operation completes
         nodeAcceptorMutex.lock();
         clientAcceptorMutex.lock();
-
+		
+		// Prepare to accept the first client and node
+		BOOST_LOG_SEV(log, LogLevel::Debug) << "Preparing to accept clients and nodes.";
+		waitingNodeConnection = std::make_shared<MasterNodeConnection>(*this);
+		waitingClient = std::make_shared<MasterClient>(*this, 1);
+		
         acceptNodeConnectionAsync(true);
         acceptClientAsync(true);
 
+		// Start heartbeat
+		BOOST_LOG_SEV(log, LogLevel::Debug) << "Starting heartbeat.";
         doHeartbeat(boost::system::error_code());
 		
 		BOOST_LOG_SEV(log, LogLevel::Info) << "Initialization done.";
@@ -137,6 +145,7 @@ namespace mcore
 
     void Master::doHeartbeat(const boost::system::error_code& e)
     {
+		// Cancelled?
         if (e) {
             return;
         }
@@ -144,11 +153,15 @@ namespace mcore
         std::lock_guard<std::recursive_mutex> hLock(heartbeatMutex);
         if (!heartbeatRunning)
             return;
+		
+		// Do heartbeat
         {
             std::lock_guard<std::recursive_mutex> lock(listenersMutex);
             for (auto *l: listeners)
                 l->heartbeat(*this);
         }
+		
+		// Setup next heartbeat
         heartbeatTimer.expires_from_now(boost::posix_time::seconds(3));
         heartbeatTimer.async_wait([this]
         (const boost::system::error_code& e){
@@ -162,18 +175,21 @@ namespace mcore
 			BOOST_LOG_SEV(log, LogLevel::Info) <<
 			format("Listening for nodes at %s.") % nodeAcceptor.local_endpoint();
 		}
+		
         nodeAcceptor.async_accept(waitingNodeConnection->tcpSocket(),
         [=](const boost::system::error_code& errorCode) {
             if (errorCode.value() == boost::asio::error::operation_aborted || disposed) {
                 nodeAcceptorMutex.unlock();
                 return;
             } else if (errorCode) {
-				// FIXME: what kind of error occurs?
 				if (initial) {
-					BOOST_LOG_SEV(log, LogLevel::Info) <<
+					BOOST_LOG_SEV(log, LogLevel::Fatal) <<
 					format("Accepting node connection failed: %s.") % errorCode;
 				}
+				nodeAcceptorMutex.unlock();
+				return;
             } else {
+				// New node connected.
                 auto conn = waitingNodeConnection;
                 {
                     std::lock_guard<std::recursive_mutex> lock(nodeConnectionsMutex);
@@ -207,21 +223,26 @@ namespace mcore
                 nodeAcceptorMutex.unlock();
                 return;
             } else if (errorCode) {
-				// FIXME: what kind of error occurs?
 				if (initial) {
-					BOOST_LOG_SEV(log, LogLevel::Debug) <<
+					BOOST_LOG_SEV(log, LogLevel::Fatal) <<
 					format("Accepting client connection failed: %s.") % errorCode;
 				}
+				nodeAcceptorMutex.unlock();
+				return;
             } else {
+				// New client connected.
                 auto conn = waitingClient;
+				
+				// Prepare to accept the next client.
                 {
                     std::lock_guard<std::recursive_mutex> lock(clientsMutex);
                     clients[conn->id()] = std::move(waitingClient);
                     waitingClient = std::make_shared<MasterClient>(*this, conn->id() + 1);
                 }
 				
+				// Setup "someone needs to respond to me" handler
 				conn->onNeedsResponse.connect([this, conn](const std::shared_ptr<MasterClientResponse>& r) {
-					// Use balancer to select a server.
+					// Use balancer to choose a server.
 					auto domain = bindClientToDomain(conn->room());
 					 
 					if (domain == boost::none) {
@@ -252,6 +273,7 @@ namespace mcore
 					
 					r->onResponded.connect(onResponded);
 					
+					// It is not impossible that time-out already happened...
 					if (r->isResponded()) {
 						onResponded(false);
 						return;
@@ -260,9 +282,13 @@ namespace mcore
 					// Let node process the response.
 					domain->first->acceptClient(r, version);
 				});
+				
+				// Register client shutdown handler.
 				conn->onShutdown.connect([this, conn]() {
 					removeClient(conn->id());
 				});
+				
+				// Start service
                 conn->didAccept();
             }
 
@@ -329,24 +355,47 @@ namespace mcore
         nodeAcceptor.close();
         clientAcceptor.close();
 
-        // Wait until node acceptor is closed
+        // Wait until node/client acceptor is closed
         nodeAcceptorMutex.lock();
         clientAcceptorMutex.lock();
 
+		// Delete node/client acceptor
         waitingNodeConnection->shutdown();
         waitingNodeConnection.reset();
+		
+		waitingClient->shutdown();
+		waitingClient.reset();
+		
+		// Reject all pending clients
+		std::vector<PendingClient> pclientList;
+		{
+			std::lock_guard<std::recursive_mutex> lock(pendingClientsMutex);
+			for (const auto& e: pendingClients)
+				pclientList.push_back(e.second);
+		}
+		for (const auto& c: pclientList)
+			c.response->reject("Server is going down.");
+		
+		// Shut all clients down
+		std::vector<std::shared_ptr<MasterClient>> clientList;
+		{
+			std::lock_guard<std::recursive_mutex> lock(clientsMutex);
+			for (const auto& e: clients)
+				clientList.push_back(e.second);
+		}
+		for (const auto& c: clientList)
+			c->shutdown();
 
         // Shut all connections down
-        std::vector<MasterNodeConnection *> nodeConns;
+        std::vector<std::shared_ptr<MasterNodeConnection>> nodeConns;
         {
             std::lock_guard<std::recursive_mutex> lock(nodeConnectionsMutex);
-            for (const auto& c: nodeConnections) {
-                c->shutdown();
-                nodeConns.push_back(c.get());
-            }
-        }
-        for (auto *c: nodeConns)
-            delete c;
+			std::copy(nodeConnections.begin(), nodeConnections.end(),
+					  std::back_inserter(nodeConns));
+		}
+		
+		for (const auto& c: nodeConns)
+			c->shutdown();
 
         _library = nullptr;
     }
@@ -442,24 +491,29 @@ namespace mcore
 				if (!node->isConnected())
 					continue;
 				
+				// Get node throttle value
 				auto it = nodeThrottles.find(node->nodeInfo().nodeName);
 				BOOST_LOG_SEV(log, LogLevel::Debug) <<node->nodeInfo().nodeName;
 				if (it == nodeThrottles.end())
 					continue;
 				
 				double nodeThrottle = it->second;
-				if (nodeThrottle == 0.0)
+				if (nodeThrottle <= 0.0)
 					continue;
 				
+				// For every domains of the node...
 				for (const auto& domain: node->domainStatuses()) {
 					auto it2 = versions.find(domain.versionName);
 					if (it2 == versions.end())
 						continue;
 					
+					
+					// Get version throttle value
 					double versionThrottle = it2->second.throttle;
-					if (versionThrottle == 0.0)
+					if (versionThrottle <= 0.0)
 						continue;
 					
+					// Add as balancer item
 					Balancer<RetType>::Item item;
 					
 					item.key = RetType(node, domain.versionName);
@@ -471,6 +525,7 @@ namespace mcore
 			}
 		}
 		
+		// Invoke balancer
 		return Balancer<RetType>().performBalancing(items);
 	}
 }

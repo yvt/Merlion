@@ -53,7 +53,6 @@ namespace mcore
 		
 	private:
         friend class MasterNodeConnection;
-		friend class MasterClient;
 
 		std::shared_ptr<Library> _library;
 		TypedLogger<Master> log;
