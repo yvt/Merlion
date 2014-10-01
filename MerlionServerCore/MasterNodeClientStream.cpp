@@ -24,6 +24,33 @@ namespace mcore
 		
 	}
 	
+	namespace
+	{
+		template <class TStream, class TLock>
+		struct synchornized_stream
+		{
+			TStream& stream;
+			TLock& lock;
+			
+			synchornized_stream(TStream& stream, TLock& lock):
+			stream(stream), lock(lock)
+			{ }
+			
+			template <class... TArgs>
+			void async_read_some(TArgs&& ...args)
+			{
+				std::lock_guard<TLock> guard(lock);
+				stream.async_read_some(std::forward<TArgs>(args)...);
+			}
+			template <class... TArgs>
+			void async_write_some(TArgs&& ...args)
+			{
+				std::lock_guard<TLock> guard(lock);
+				stream.async_write_some(std::forward<TArgs>(args)...);
+			}
+		};
+	}
+	
 	void MasterNodeClientStream::service()
 	{
 		// Read clientId
@@ -57,8 +84,13 @@ namespace mcore
 			auto c = connection;
 			
 			req->response->accept
-			([this, self, c](ssl::stream<ip::tcp::socket>& stream) {
-				startAsyncPipe(stream, *connection, 4096, [this, self, c](const boost::system::error_code &error, std::uint64_t) {
+			([this, self, c](ssl::stream<ip::tcp::socket>& stream, std::recursive_mutex& ioMutex) {
+				
+				auto syncStream = std::make_shared
+				<synchornized_stream<ssl::stream<ip::tcp::socket>, std::recursive_mutex>>
+				(stream, ioMutex);
+				
+				startAsyncPipe(*syncStream, *connection, 4096, [this, self, c, syncStream](const boost::system::error_code &error, std::uint64_t) {
 					if (error) {
 						BOOST_LOG_SEV(log, LogLevel::Debug) <<
 						"Downstream error.: " << error;
@@ -68,7 +100,7 @@ namespace mcore
 				   }
 				   shutdown();
 			   });
-				startAsyncPipe(*connection, stream, 4096, [this, self, c](const boost::system::error_code &error, std::uint64_t) {
+				startAsyncPipe(*connection, *syncStream, 4096, [this, self, c, syncStream](const boost::system::error_code &error, std::uint64_t) {
 					if (error) {
 						BOOST_LOG_SEV(log, LogLevel::Debug) <<
 						"Upstream error.: " << error;

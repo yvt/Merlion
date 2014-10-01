@@ -36,7 +36,7 @@ namespace mcore
         bool accepted;
         volatile bool disposed;
 		
-		std::recursive_mutex mutex;
+		ioMutexType mutex;
 
         boost::asio::ssl::context& sslContext;
         sslSocketType sslSocket;
@@ -51,7 +51,7 @@ namespace mcore
 		template <class Callback>
 		void respondStatus(ClientResponse resp, Callback callback);
 		
-		void connectionApproved(std::function<void(sslSocketType&)> onsuccess,
+		void connectionApproved(std::function<void(sslSocketType&, ioMutexType&)> onsuccess,
 								std::function<void()> onfail,
 								const std::string& version);
 		void connectionRejected();
@@ -88,7 +88,7 @@ namespace mcore
 		
 		const MasterClient::ptr &client() const { return _client; }
 		
-		void accept(std::function<void(MasterClient::sslSocketType&)> onsuccess,
+		void accept(std::function<void(MasterClient::sslSocketType&, MasterClient::ioMutexType&)> onsuccess,
 					std::function<void()> onfail,
 					const std::string& version);
 		void reject(const std::string& reason);

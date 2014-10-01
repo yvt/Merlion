@@ -32,8 +32,8 @@ namespace mcore
 
     void MasterClient::didAccept()
     {
-        auto self = shared_from_this();
-		std::lock_guard<std::recursive_mutex> lock(mutex);
+		auto self = shared_from_this();
+		std::lock_guard<ioMutexType> lock(mutex);
         accepted = true;
 		
 		log.setChannel(str(format("Client:%d [%s]") % clientId % tcpSocket().remote_endpoint()));
@@ -56,7 +56,7 @@ namespace mcore
     void MasterClient::handshakeDone(const boost::system::error_code &error)
 	{
 		auto self = shared_from_this();
-		std::lock_guard<std::recursive_mutex> lock(mutex);
+		std::lock_guard<ioMutexType> lock(mutex);
 		
 		if (error) {
 			BOOST_LOG_SEV(log, LogLevel::Debug) << "TLS handshake failed. Disconnecting.: " << error;
@@ -128,7 +128,7 @@ namespace mcore
 	void MasterClient::connectionRejected()
 	{
 		auto self = shared_from_this();
-		std::lock_guard<std::recursive_mutex> lock(mutex);
+		std::lock_guard<ioMutexType> lock(mutex);
 		
 		BOOST_LOG_SEV(log, LogLevel::Warn) << "Rejecting the client.";
 		
@@ -138,13 +138,13 @@ namespace mcore
 					  });
 	}
 	
-	void MasterClient::connectionApproved(std::function<void(sslSocketType&)> onsuccess,
+	void MasterClient::connectionApproved(std::function<void(sslSocketType&, ioMutexType&)> onsuccess,
 										  std::function<void()> onfail,
 										  const std::string& version)
 	{
 		
 		auto self = shared_from_this();
-		std::lock_guard<std::recursive_mutex> lock(mutex);
+		std::lock_guard<ioMutexType> lock(mutex);
 		
 		if (disposed) {
 			onfail();
@@ -162,7 +162,7 @@ namespace mcore
 				  onfail();
 				  shutdown();
 			  } else {
-				  onsuccess(sslSocket);
+				  onsuccess(sslSocket, mutex);
 				  timeoutTimer.cancel();
 			  }
 		  });
@@ -172,7 +172,7 @@ namespace mcore
 	void MasterClient::respondStatus(ClientResponse resp, Callback callback)
 	{
 		auto self = shared_from_this();
-		std::lock_guard<std::recursive_mutex> lock(mutex);
+		std::lock_guard<ioMutexType> lock(mutex);
 		
 		auto buf = std::make_shared<ClientResponse>(resp);
 		asio::async_write(sslSocket, asio::buffer(buf.get(), sizeof(ClientResponse)),
@@ -184,7 +184,7 @@ namespace mcore
     void MasterClient::shutdown()
 	{
 		auto self = shared_from_this();
-		std::lock_guard<std::recursive_mutex> lock(mutex);
+		std::lock_guard<ioMutexType> lock(mutex);
 		
         if (disposed)
             return;
@@ -210,7 +210,7 @@ namespace mcore
 		reject("No one responded to MasterClientResponse.");
 	}
 	
-	void MasterClientResponse::accept(std::function<void (MasterClient::sslSocketType &)> onsuccess,
+	void MasterClientResponse::accept(std::function<void (MasterClient::sslSocketType &, MasterClient::ioMutexType&)> onsuccess,
 									  std::function<void ()> onfail,
 									  const std::string& version)
 	{
