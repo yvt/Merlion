@@ -160,6 +160,8 @@ namespace mcore
 			return;
 		}
 		
+		remainingLength -= static_cast<std::uint64_t>(sentLen);
+		
 		connection->writeAsync(asio::buffer(buffer.data(), sentLen),
 		[this, self](const boost::system::error_code &error, std::size_t)
 		{
