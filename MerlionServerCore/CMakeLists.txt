@@ -5,9 +5,9 @@ find_package(Boost 1.55.0 REQUIRED COMPONENTS system regex thread log filesystem
 include_directories(${Boost_INCLUDE_DIRS})
 list(APPEND LIB_LIST ${Boost_LIBRARIES})
 
-find_package(OPENSSL 1.0.1 REQUIRED)
-include_directories(${OPENSSL_INCLUDE_DIRS})
-list(APPEND LIB_LIST ${OPENSSL_LIBRARIES})
+find_package(OpenSSL 1.0.1 REQUIRED)
+include_directories(${OpenSSL_INCLUDE_DIRS})
+list(APPEND LIB_LIST ${OpenSSL_LIBRARIES})
 
 set(SOURCE_FILES
 Library.cpp
