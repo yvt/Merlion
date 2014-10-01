@@ -245,7 +245,7 @@ namespace mcore
 					// Use balancer to choose a server.
 					auto domain = bindClientToDomain(conn->room());
 					 
-					if (domain == boost::none) {
+					if (!domain) {
 						r->reject("Could not find a suitable domain. Overload possible.");
 						return;
 					}

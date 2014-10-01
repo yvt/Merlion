@@ -161,7 +161,7 @@ namespace mcore
 							auto clientId = reader.read<std::uint64_t>();
 							
 							auto req = master().dequePendingClient(clientId);
-							if (req == boost::none) {
+							if (!req) {
 								BOOST_LOG_SEV(log, LogLevel::Debug)
 								<< format("Requested to reject client #%d that doesn't exist.") % clientId;
 								break;

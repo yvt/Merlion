@@ -72,7 +72,7 @@ namespace mcore
 			
 			auto req = connection->master().dequePendingClient(clientId);
 			
-			if (req == boost::none) {
+			if (!req) {
 				BOOST_LOG_SEV(log, LogLevel::Debug) <<
 				"Client ID was not found in the master pending client table.";
 				connection->shutdown();
