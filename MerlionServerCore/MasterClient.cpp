@@ -68,7 +68,7 @@ namespace mcore
         
         // Read prologue
         auto buf = std::make_shared<std::array<char, 2048>>();
-        asio::async_read(sslSocket, asio::buffer(*buf),
+        asio::async_read(sslSocket, asio::buffer(buf->data(), buf->size()),
         [this, buf, self](const boost::system::error_code& error, std::size_t readCount) {
 			
 			auto self = shared_from_this();
