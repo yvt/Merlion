@@ -116,6 +116,9 @@ namespace mcore
 		CustomLogSinkInitializer()
 		{
 			auto core = boost::log::core::get();
+			if (sink == nullptr) {
+				sink = boost::make_shared<CustomLogSink>();
+			}
 			auto s = boost::make_shared<sinks::unlocked_sink<CustomLogSink>>(sink);
 			core->add_sink(s);
 		}
