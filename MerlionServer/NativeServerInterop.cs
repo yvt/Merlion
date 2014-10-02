@@ -39,8 +39,7 @@ namespace Merlion.Server
 		static extern MSCResult MSCRemoveLogSink(MSCLogSinkSafeHandle handle);
 
 		[DllImport("MerlionServerCore")]
-		[return: MarshalAs(UnmanagedType.LPStr)]
-		static extern string MSCGetLastErrorMessage();
+		static extern IntPtr MSCGetLastErrorMessage();
 
 
 		struct MSCMasterParameters
@@ -215,11 +214,11 @@ namespace Merlion.Server
 
 		static unsafe string GetLastError()
 		{
-			string msg = MSCGetLastErrorMessage ();
-			if (msg == null) {
+			IntPtr msg = MSCGetLastErrorMessage ();
+			if (msg == IntPtr.Zero) {
 				throw new InvalidOperationException ("MSCGetLastErrorMessage returned nullptr.");
 			}
-			return msg;
+			return Marshal.PtrToStringAnsi(msg);
 		}
 
 		static void CheckResult(MSCResult result)
