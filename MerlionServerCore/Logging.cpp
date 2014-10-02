@@ -2,8 +2,13 @@
 
 #include <boost/log/core.hpp>
 #include <boost/log/sinks.hpp>
+#if BOOST_VERSION >= 105600
 #include <boost/core/demangle.hpp>
-
+#define MSC_BOOST_DEMANGLE boost::core::demangle
+#else
+#include <boost/units/detail/utility.hpp>
+#define MSC_BOOST_DEMANGLE boost::units::detail::demangle
+#endif
 #include "Logging.hpp"
 #include "Utils.hpp"
 #include "Exceptions.hpp"
@@ -19,7 +24,7 @@ namespace mcore
 		add_attribute("Source", attrs::constant<std::string>(source));
 	}
 	Logger::Logger(const std::type_info &source):
-	Logger(boost::core::demangle(source.name()))
+	Logger(MSC_BOOST_DEMANGLE(source.name()))
 	{
 		setHost("Local");
 	}
