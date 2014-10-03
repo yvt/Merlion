@@ -40,8 +40,24 @@ namespace Merlion.Server
 
 			domains = new DomainManager (this);
 
-			param.VersionLoader = (ver) => new Task(() => domains.LoadVersion(ver)).Start();
-			param.VersionUnloader = (ver) => new Task(() => domains.UnloadVersion(ver)).Start();
+			param.VersionLoader = (ver) => new Task(() => {
+				try {
+					domains.LoadVersion(ver);
+				} catch (Exception ex) {
+					log.Warn(string.Format("Error while loading version '{0}'.", 
+						ver), ex);
+					throw;
+				}
+			}).Start();
+			param.VersionUnloader = (ver) => new Task(() => {
+				try {
+					domains.UnloadVersion(ver);
+				} catch (Exception ex) {
+					log.Warn(string.Format("Error while unloading version '{0}'.", 
+						ver), ex);
+					throw;
+				}
+			}).Start();
 			param.AcceptClientMethod = (clientId, version, room) => {
 				try {
 					var domain = domains.GetDomain(version);
@@ -58,10 +74,22 @@ namespace Merlion.Server
 				}
 			};
 			param.DiscardClientMethod = (clientId) => {
-				domains.DiscardClient((long)clientId);
+				try {
+					domains.DiscardClient((long)clientId);
+				} catch (Exception ex) {
+					log.Warn(string.Format("Error while discarding the client '{0}'.", 
+						clientId), ex);
+					throw;
+				}
 			};
 			param.SetupClientMethod = (clientId, setup) => {
-				domains.SetupClient((long)clientId, setup);
+				try {
+					domains.SetupClient((long)clientId, setup);
+				} catch (Exception ex) {
+					log.Warn(string.Format("Error while setting up the client '{0}'.", 
+						clientId), ex);
+					throw;
+				}
 			};
 
 
