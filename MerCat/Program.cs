@@ -67,11 +67,17 @@ namespace Merlion.MerCat
 						while (true) {
 							int readCount = 0;
 							int read = 0;
+							int retryCount = 100;
 
-							while ((readCount = s.Read (buffer, read, buffer.Length - read)) > 0) {
-								read += readCount;
-								if (read == buffer.Length)
-									break;
+							while (read < buffer.Length && retryCount > 0) {
+
+								while ((readCount = s.Read (buffer, read, buffer.Length - read)) > 0) {
+									read += readCount;
+									if (read == buffer.Length)
+										break;
+								}
+								--retryCount;
+								System.Threading.Thread.Sleep(100);
 							}
 
 							if (read < buffer.Length) {
