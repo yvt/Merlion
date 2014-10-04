@@ -47,7 +47,7 @@ namespace Merlion.Server
 			using (var ser = System.IO.File.OpenRead(configFile)) {
 				var cfg = (ApplicationConfig)xser.Deserialize (ser);
 				if (cfg == null) {
-					throw new System.Configuration.ConfigurationErrorsException (
+					throw new InvalidOperationException (
 						"Failed to deserialize the application configuration file (MerlionApplication.config).");
 				}
 
@@ -104,15 +104,15 @@ namespace Merlion.Server
 				ctor = apptype.GetConstructor(new Type[0]);
 
 				if (ctor == null) {
-					throw new InvalidOperationException(
+					throw new System.IO.InvalidDataException(
 						string.Format("Nullary constructor of '{0}' was not found.",
 							apptype.FullName));
 				}
 
-			} catch (System.Configuration.ConfigurationErrorsException) {
+			} catch (System.IO.InvalidDataException) {
 				throw;
 			} catch (Exception ex) {
-				throw new System.Configuration.ConfigurationErrorsException (
+				throw new System.IO.InvalidDataException (
 					"Error occured while processing application configuration file.", ex);
 			}
 

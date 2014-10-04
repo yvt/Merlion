@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MerEcho", "MerEcho\MerEcho.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MerlionSimpleServer", "MerlionSimpleServer\MerlionSimpleServer.csproj", "{B47B8F7A-620F-49E1-8C83-D58E20C6170D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DummyLog4Net", "DummyLog4Net\DummyLog4Net.csproj", "{388A636E-A039-40A1-A0C3-ABAD897FCA5D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -25,6 +27,10 @@ Global
 		{2E12801E-78DB-4591-AA37-28625ED9D6B1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2E12801E-78DB-4591-AA37-28625ED9D6B1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2E12801E-78DB-4591-AA37-28625ED9D6B1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{388A636E-A039-40A1-A0C3-ABAD897FCA5D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{388A636E-A039-40A1-A0C3-ABAD897FCA5D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{388A636E-A039-40A1-A0C3-ABAD897FCA5D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{388A636E-A039-40A1-A0C3-ABAD897FCA5D}.Release|Any CPU.Build.0 = Release|Any CPU
 		{7F79C7B6-4768-4779-927B-F8B547CB7C65}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{7F79C7B6-4768-4779-927B-F8B547CB7C65}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7F79C7B6-4768-4779-927B-F8B547CB7C65}.Release|Any CPU.ActiveCfg = Release|Any CPU
