@@ -440,7 +440,7 @@ namespace mcore
         versions.erase(name);
 
         std::lock_guard<std::recursive_mutex> lock2(listenersMutex);
-        for (auto *l: listeners) l->versionAdded(*this, name);
+        for (auto *l: listeners) l->versionRemoved(*this, name);
     }
 
     void Master::setVersionThrottle(const std::string &name, double d)
