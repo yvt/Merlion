@@ -16,6 +16,8 @@ namespace Merlion.Client
 		string hostName;
 		int port;
 
+		public System.Net.Security.RemoteCertificateValidationCallback CertificateValidationCallback { get; set; }
+
 		public MerlionClient (string addr)
 		{
 			var parts = addr.Split (':');
@@ -140,6 +142,12 @@ namespace Merlion.Client
 				System.Security.Cryptography.X509Certificates.X509Chain chain, 
 				SslPolicyErrors sslPolicyErrors)
 			{
+				var validator = client.CertificateValidationCallback;
+
+				if (validator != null) {
+					return validator (client, certificate, chain, sslPolicyErrors);
+				}
+
 				return true;
 			}
 
