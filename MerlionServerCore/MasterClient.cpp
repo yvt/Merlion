@@ -94,8 +94,18 @@ namespace mcore
 				_room = reader.readString();
 				
 				std::string requestedVersion = reader.readString();
-				if (allowSpecifyVersion)
+				
+				BOOST_LOG_SEV(log, LogLevel::Debug) <<
+				format("Client requests version '%s'.") % requestedVersion;
+				
+				if (allowSpecifyVersion) {
 					versionRequest.reset(new LikeMatcher(requestedVersion));
+					BOOST_LOG_SEV(log, LogLevel::Debug) <<
+					"Version request string parsed.";
+				} else {
+					BOOST_LOG_SEV(log, LogLevel::Debug) <<
+					"Version request is disallowed by the server configuration.";
+				}
 				
 				std::shared_ptr<MasterClientResponse> resp(new MasterClientResponse(shared_from_this()));
 				

@@ -497,7 +497,6 @@ namespace mcore
 				
 				// Get node throttle value
 				auto it = nodeThrottles.find(node->nodeInfo().nodeName);
-				BOOST_LOG_SEV(log, LogLevel::Debug) <<node->nodeInfo().nodeName;
 				if (it == nodeThrottles.end())
 					continue;
 				
