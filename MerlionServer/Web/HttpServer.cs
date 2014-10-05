@@ -78,15 +78,15 @@ namespace Merlion.Server.Web
 							try {
 								ctx.Dispose();
 							} catch (Exception ex2) {
-								log.ErrorFormat("Unknown exception while returning error. Ignoring.", ex2);
+								log.Error("Unknown exception while returning error. Ignoring.", ex2);
 							}
 						} catch (Exception ex) {
 							ctx.Response.StatusCode = 500;
-							log.ErrorFormat("Unknown exception while handling request.", ex);
+							log.Error("Unknown exception while handling request.", ex);
 							try {
 								ctx.Dispose();
 							} catch (Exception ex2) {
-								log.ErrorFormat("Unknown exception while returning error. Ignoring.", ex2);
+								log.Error("Unknown exception while returning error. Ignoring.", ex2);
 							}
 						}
 					}).Start ();
