@@ -55,7 +55,6 @@ extern "C" {
 
 	struct MSCMasterParameters
 	{
-		MSCMasterFlags flags;
 		const char *nodeEndpoint;
 		const char *clientEndpoint;
 		const char *sslCertificateFile;
@@ -64,6 +63,8 @@ extern "C" {
 		
 		MSCGetVersionPackagePathCallback packagePathCallback;
 		void *packagePathCallbackUserData;
+		
+		MSCMasterFlags flags;
 	};
 	
 	typedef void (*MSCMasterEnumerateNodesNodeCallback)

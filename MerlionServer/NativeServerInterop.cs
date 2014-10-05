@@ -50,8 +50,6 @@ namespace Merlion.Server
 
 		struct MSCMasterParameters
 		{
-			public MSCMasterFlags flags;
-
 			[MarshalAs(UnmanagedType.LPStr)]
 			public string nodeEndpoint;
 
@@ -71,7 +69,7 @@ namespace Merlion.Server
 			public MSCGetVersionPackagePathCallback packagePathCallback;
 			public IntPtr packagePathCallbackUserData;
 
-
+			public MSCMasterFlags flags;
 		}
 
 		delegate uint MSCGetVersionPackagePathCallback 
