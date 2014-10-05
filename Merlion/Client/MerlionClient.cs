@@ -15,6 +15,7 @@ namespace Merlion.Client
 		byte[] room;
 		string hostName;
 		int port;
+		public string RequestedVersion { get; set; }
 
 		public System.Net.Security.RemoteCertificateValidationCallback CertificateValidationCallback { get; set; }
 
@@ -27,6 +28,8 @@ namespace Merlion.Client
 
 			hostName = parts [0];
 			port = parts.Length >= 2 ? int.Parse (parts [1]) : 16070;
+
+			RequestedVersion = "%";
 		}
 		public MerlionClient (IPEndPoint endpoint)
 		{
@@ -88,11 +91,14 @@ namespace Merlion.Client
 						bw.Write((uint)0x918123ab); // magic
 						bw.Write(room.Length);
 						bw.Write(room, 0, room.Length);
+						var verReq = System.Text.Encoding.UTF8.GetBytes(client.RequestedVersion);
+						bw.Write(verReq.Length);
+						bw.Write(verReq, 0, verReq.Length);
 
 						if (ms.Length <= 2048) {
 							ms.SetLength(2048);
 						} else {
-							throw new InvalidOperationException("Room ID is too long.");
+							throw new InvalidOperationException("Header is too bug.");
 						}
 
 						prologue = ms.ToArray();

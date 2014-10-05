@@ -29,6 +29,7 @@ namespace mcore
         std::string sslPrivateKeyFile;
 		std::string sslPassword;
 		std::function<std::string(const std::string&)> getPackagePathFunction;
+		bool allowVersionSpecification;
 		
         MasterParameters() { }
         MasterParameters(const MSCMasterParameters&);

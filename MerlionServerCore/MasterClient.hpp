@@ -14,6 +14,7 @@ namespace mcore
     class Master;
 	class MasterNode;
 	class MasterClientResponse;
+	class LikeMatcher;
 	
     class MasterClient :
 	public std::enable_shared_from_this<MasterClient>,
@@ -29,6 +30,8 @@ namespace mcore
 		friend class MasterClientResponse;
 		
 		TypedLogger<MasterClient> log;
+		
+		bool allowSpecifyVersion;
         
         std::uint64_t clientId;
 
@@ -45,6 +48,7 @@ namespace mcore
 		
 		std::string version;
 		std::string _room;
+		std::unique_ptr<LikeMatcher> versionRequest;
 		
         void handshakeDone(const boost::system::error_code&);
 		
@@ -57,7 +61,8 @@ namespace mcore
 		void connectionRejected();
 		
     public:
-        MasterClient(Master& master, std::uint64_t id);
+        MasterClient(Master& master, std::uint64_t id,
+					 bool allowSpecifyVersion);
         ~MasterClient();
         
         std::uint64_t id() const { return clientId; }
@@ -65,6 +70,8 @@ namespace mcore
         socketType& tcpSocket() { return sslSocket.next_layer(); }
 		
 		const std::string& room() const { return _room; }
+		
+		bool doesAcceptVersion(const std::string&);
 		
         void didAccept();
         void shutdown();

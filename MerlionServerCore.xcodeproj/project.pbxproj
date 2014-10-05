@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E81F77D819E162D30094009F /* LikeMatcher.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E81F77D619E162D30094009F /* LikeMatcher.cpp */; };
+		E81F77D919E162D30094009F /* LikeMatcher.hpp in Headers */ = {isa = PBXBuildFile; fileRef = E81F77D719E162D30094009F /* LikeMatcher.hpp */; };
 		E833F50F19D4489400B003C0 /* AsyncPipe.hpp in Headers */ = {isa = PBXBuildFile; fileRef = E833F4FB19D4489400B003C0 /* AsyncPipe.hpp */; };
 		E833F51019D4489400B003C0 /* Exceptions.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E833F4FD19D4489400B003C0 /* Exceptions.cpp */; };
 		E833F51119D4489400B003C0 /* Exceptions.hpp in Headers */ = {isa = PBXBuildFile; fileRef = E833F4FE19D4489400B003C0 /* Exceptions.hpp */; };
@@ -50,6 +52,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		E81F77D619E162D30094009F /* LikeMatcher.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = LikeMatcher.cpp; sourceTree = "<group>"; };
+		E81F77D719E162D30094009F /* LikeMatcher.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = LikeMatcher.hpp; sourceTree = "<group>"; };
 		E833F4F719D4488100B003C0 /* libMerlionServerCore.dylib */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; includeInIndex = 0; path = libMerlionServerCore.dylib; sourceTree = BUILT_PRODUCTS_DIR; };
 		E833F4FB19D4489400B003C0 /* AsyncPipe.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = AsyncPipe.hpp; sourceTree = "<group>"; };
 		E833F4FC19D4489400B003C0 /* CMakeLists.txt */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = CMakeLists.txt; sourceTree = "<group>"; };
@@ -182,6 +186,8 @@
 				E833F50A19D4489400B003C0 /* Packet.hpp */,
 				E833F50D19D4489400B003C0 /* Utils.cpp */,
 				E833F50E19D4489400B003C0 /* Utils.hpp */,
+				E81F77D619E162D30094009F /* LikeMatcher.cpp */,
+				E81F77D719E162D30094009F /* LikeMatcher.hpp */,
 				E833F4FB19D4489400B003C0 /* AsyncPipe.hpp */,
 				E833F50B19D4489400B003C0 /* Protocol.hpp */,
 				E833F53119D44CD400B003C0 /* Prefix.pch */,
@@ -222,6 +228,7 @@
 				E833F54B19D54B0400B003C0 /* Logging.hpp in Headers */,
 				E833F51719D4489400B003C0 /* MasterClient.hpp in Headers */,
 				E833F54719D544FA00B003C0 /* Node.hpp in Headers */,
+				E81F77D919E162D30094009F /* LikeMatcher.hpp in Headers */,
 				E833F51519D4489400B003C0 /* Master.hpp in Headers */,
 				E833F53519D462D800B003C0 /* MasterNodeClientStream.hpp in Headers */,
 				E833F52119D4489400B003C0 /* Utils.hpp in Headers */,
@@ -297,6 +304,7 @@
 				E833F53819D465D800B003C0 /* MasterVersionProvider.cpp in Sources */,
 				E833F54619D544FA00B003C0 /* Node.cpp in Sources */,
 				E833F51019D4489400B003C0 /* Exceptions.cpp in Sources */,
+				E81F77D819E162D30094009F /* LikeMatcher.cpp in Sources */,
 				E833F52019D4489400B003C0 /* Utils.cpp in Sources */,
 				E833F54A19D54B0400B003C0 /* Logging.cpp in Sources */,
 				E833F51219D4489400B003C0 /* Library.cpp in Sources */,

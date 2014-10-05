@@ -7,6 +7,7 @@
 #include "Protocol.hpp"
 #include <boost/format.hpp>
 #include "MasterNode.hpp"
+#include "LikeMatcher.hpp"
 
 namespace asio = boost::asio;
 namespace ssl = boost::asio::ssl;
@@ -16,13 +17,15 @@ using boost::format;
 namespace mcore
 {
 
-    MasterClient::MasterClient(Master& master, std::uint64_t id):
-            clientId(id),
-            service(master.library()->ioService()),
-            sslContext(master.sslContext()),
-            sslSocket(service, sslContext),
-            disposed(false),
-            timeoutTimer(service)
+    MasterClient::MasterClient(Master& master, std::uint64_t id,
+							   bool allowSpecifyVersion):
+	clientId(id),
+	service(master.library()->ioService()),
+	sslContext(master.sslContext()),
+	sslSocket(service, sslContext),
+	disposed(false),
+	timeoutTimer(service),
+	allowSpecifyVersion(allowSpecifyVersion)
     {
     }
 
@@ -89,6 +92,10 @@ namespace mcore
                 }
 				
 				_room = reader.readString();
+				
+				std::string requestedVersion = reader.readString();
+				if (allowSpecifyVersion)
+					versionRequest.reset(new LikeMatcher(requestedVersion));
 				
 				std::shared_ptr<MasterClientResponse> resp(new MasterClientResponse(shared_from_this()));
 				
@@ -179,6 +186,13 @@ namespace mcore
 		[this, buf, self, callback](const boost::system::error_code& error, std::size_t) {
 			callback(error);
 		});
+	}
+	
+	bool MasterClient::doesAcceptVersion(const std::string &ver)
+	{
+		if (!allowSpecifyVersion)
+			return true;
+		return versionRequest->match(ver);
 	}
     
     void MasterClient::shutdown()

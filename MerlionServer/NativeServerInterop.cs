@@ -41,9 +41,17 @@ namespace Merlion.Server
 		[DllImport("MerlionServerCore")]
 		static extern IntPtr MSCGetLastErrorMessage();
 
+		[Flags]
+		enum MSCMasterFlags : uint
+		{
+			MSCMF_None = 0,
+			MSCMF_DisallowVersionSpecification = 1 << 0
+		}
 
 		struct MSCMasterParameters
 		{
+			public MSCMasterFlags flags;
+
 			[MarshalAs(UnmanagedType.LPStr)]
 			public string nodeEndpoint;
 
@@ -374,6 +382,7 @@ namespace Merlion.Server
 			public delegate string PackagePathDelegate(string versionName);
 			public delegate void DeployPackageDelegate (string versionName);
 
+			public bool DisallowVersionSpecification;
 			public string NodeEndpoint;
 			public string ClientEndpoint;
 			public string SslCertificateFile;
@@ -419,8 +428,12 @@ namespace Merlion.Server
 					sslCertificateFile = param.SslCertificateFile,
 					sslPrivateKeyFile = param.SslPrivateKeyFile,
 					sslPassword = param.SslPassword,
-					packagePathCallback = HandleMSCGetVersionPackagePathCallback
+					packagePathCallback = HandleMSCGetVersionPackagePathCallback,
+					flags = MSCMasterFlags.MSCMF_None
 				};
+				if (param.DisallowVersionSpecification) {
+					paramMarshaled.flags |= MSCMasterFlags.MSCMF_DisallowVersionSpecification;
+				}
 				CheckResult(MSCMasterCreate(library.SafeHandle, paramMarshaled, out handle));
 			}
 

@@ -46,9 +46,16 @@ extern "C" {
 	
 	typedef std::uint32_t (*MSCDeployPackageCallback)
 	(const char *versionName, void *userdata);
+	
+	enum MSCMasterFlags : std::uint32_t
+	{
+		MSCMF_None = 0,
+		MSCMF_DisallowVersionSpecification = 1 << 0
+	};
 
 	struct MSCMasterParameters
 	{
+		MSCMasterFlags flags;
 		const char *nodeEndpoint;
 		const char *clientEndpoint;
 		const char *sslCertificateFile;

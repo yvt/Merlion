@@ -18,6 +18,8 @@ namespace mcore
 
     MasterParameters::MasterParameters(MSCMasterParameters const &param)
     {
+		allowVersionSpecification = (param.flags & MSCMF_DisallowVersionSpecification) == 0;
+		
         if (param.nodeEndpoint == nullptr) {
             MSCThrow(InvalidArgumentException("nodeEndpoint"));
         }
@@ -102,7 +104,8 @@ namespace mcore
 		// Prepare to accept the first client and node
 		BOOST_LOG_SEV(log, LogLevel::Debug) << "Preparing to accept clients and nodes.";
 		waitingNodeConnection = std::make_shared<MasterNodeConnection>(*this);
-		waitingClient = std::make_shared<MasterClient>(*this, 1);
+		waitingClient = std::make_shared<MasterClient>(*this, 1,
+													   _parameters.allowVersionSpecification);
 		
         acceptNodeConnectionAsync(true);
         acceptClientAsync(true);
@@ -237,7 +240,8 @@ namespace mcore
                 {
                     std::lock_guard<std::recursive_mutex> lock(clientsMutex);
                     clients[conn->id()] = std::move(waitingClient);
-                    waitingClient = std::make_shared<MasterClient>(*this, conn->id() + 1);
+                    waitingClient = std::make_shared<MasterClient>(*this, conn->id() + 1,
+																   _parameters.allowVersionSpecification);
                 }
 				
 				// Setup "someone needs to respond to me" handler
