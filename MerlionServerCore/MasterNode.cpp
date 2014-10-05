@@ -315,6 +315,16 @@ namespace mcore
 	{
 		auto client = response->client();
 		
+		std::lock_guard<std::recursive_mutex> lock(domainsMutex);
+		auto it = domains.find(version);
+		if (it == domains.end()) {
+			response->reject("Version not found.");
+			return;
+		}
+		
+		it->second.clients.emplace(response->client()->id(),
+								   response->client());
+		
 		sendClientConnected(client->id(), version, client->room());
 	}
 	

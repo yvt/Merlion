@@ -102,6 +102,8 @@ namespace Merlion.Server
 						NumRooms = domain.RoomCount,
 						NumClients = domain.ClientCount
 					});
+					info.NumRooms += domain.RoomCount;
+					info.NumClients += domain.ClientCount;
 				}
 
 				return info;
