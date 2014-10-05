@@ -54,6 +54,10 @@ namespace Merlion.Server
 
 			NativeServerInterop.Logging.RegisterLogger ();
 
+			log4net.LogManager.GetLogger (typeof(MainClass)).InfoFormat (
+				"Base directory is '{0}'.", 
+				AppConfiguration.BaseDirectory);
+
 			 /*
 			new Thread (() => {
 				Thread.Sleep(20000);

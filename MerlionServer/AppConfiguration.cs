@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Configuration;
-
+using System.IO;
 
 namespace Merlion.Server
 {
@@ -92,6 +92,18 @@ namespace Merlion.Server
 				int.Parse (parts [1]));
 		}
 
+		public static string BaseDirectory
+		{
+			get { 
+				var s = AppConfiguration.AppSettings["BaseDirectory"].Trim();
+				if (string.IsNullOrEmpty(s)) {
+					s = Environment.GetFolderPath (Environment.SpecialFolder.ApplicationData);
+					s = System.IO.Path.Combine (s, "Merlion");
+				}
+				return s;
+			}
+		}
+
 		public static System.Net.IPEndPoint EndpointAddress
 		{
 			get { 
@@ -111,9 +123,10 @@ namespace Merlion.Server
 			get { 
 				var s = AppConfiguration.AppSettings["Log4NetConfigFile"];
 				if (string.IsNullOrEmpty(s)) {
-					s = Environment.GetFolderPath (Environment.SpecialFolder.ApplicationData);
-					s = System.IO.Path.Combine (s, "Merlion");
-					s = System.IO.Path.Combine (s, "Log4Net.config");
+					s = "Log4Net.config";
+				}
+				if (!Path.IsPathRooted(s)) {
+					s = System.IO.Path.Combine (BaseDirectory, s);
 				}
 				return s;
 			}
@@ -131,11 +144,23 @@ namespace Merlion.Server
 
 		public static string MasterServerCertificate
 		{
-			get { return AppConfiguration.AppSettings["MasterServerCertificate"]; }
+			get {
+				var s = AppConfiguration.AppSettings["MasterServerCertificate"];
+				if (!string.IsNullOrEmpty(s) && !Path.IsPathRooted(s)) {
+					s = Path.Combine (BaseDirectory, s);
+				}
+				return s;
+			}
 		}
 		public static string MasterServerPrivateKey
 		{
-			get { return AppConfiguration.AppSettings["MasterServerPrivateKey"]; }
+			get { 
+				var s = AppConfiguration.AppSettings["MasterServerPrivateKey"];
+				if (!string.IsNullOrEmpty(s) && !Path.IsPathRooted(s)) {
+					s = Path.Combine (BaseDirectory, s);
+				}
+				return s;
+			}
 		}
 
 		public static string DeployDirectory
@@ -143,9 +168,12 @@ namespace Merlion.Server
 			get { 
 				var s = AppConfiguration.AppSettings["DeployDirectory"].Trim();
 				if (string.IsNullOrEmpty(s)) {
-					s = Environment.GetFolderPath (Environment.SpecialFolder.ApplicationData);
-					s = System.IO.Path.Combine (s, "Merlion");
+					s = "";
 				}
+				if (!Path.IsPathRooted(s)) {
+					s = System.IO.Path.Combine (BaseDirectory, s);
+				}
+
 				return s;
 			}
 		}
@@ -155,14 +183,19 @@ namespace Merlion.Server
 			get { 
 				var s = AppConfiguration.AppSettings["BalancerConfigFilePath"].Trim();
 				if (string.IsNullOrEmpty(s)) {
-					s = Environment.GetFolderPath (Environment.SpecialFolder.ApplicationData);
-					s = System.IO.Path.Combine (s, "Merlion");
-					s = System.IO.Path.Combine (s, "Balancer.config");
+					s = "Balancer.config";
+				}
+				if (!Path.IsPathRooted(s)) {
+					s = System.IO.Path.Combine (BaseDirectory, s);
 				}
 				return s;
 			}
 		}
 
+		public static bool DisallowClientSideVersionSpecification
+		{
+			get { return Convert.ToBoolean(AppConfiguration.AppSettings["DisallowClientSideVersionSpecification"]); }
+		}
 
 		public static string NodeName
 		{
