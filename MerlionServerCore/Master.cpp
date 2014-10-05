@@ -247,7 +247,7 @@ namespace mcore
 				// Setup "someone needs to respond to me" handler
 				conn->onNeedsResponse.connect([this, conn](const std::shared_ptr<MasterClientResponse>& r) {
 					// Use balancer to choose a server.
-					auto domain = bindClientToDomain(conn->room());
+					auto domain = bindClientToDomain(conn);
 					 
 					if (!domain) {
 						r->reject("Could not find a suitable domain. Overload possible.");
@@ -481,9 +481,11 @@ namespace mcore
 	}
 	
 	boost::optional<std::pair<std::shared_ptr<MasterNode>, std::string>>
-	Master::bindClientToDomain(const std::string& room)
+	Master::bindClientToDomain(const std::shared_ptr<MasterClient>& client)
 	{
 		using RetType = std::pair<std::shared_ptr<MasterNode>, std::string>;
+		
+		auto room = client->room();
 		
 		std::vector<Balancer<RetType>::Item> items;
 		{
@@ -494,6 +496,14 @@ namespace mcore
 				auto node = c.second;
 				if (!node->isConnected())
 					continue;
+				
+				// Has room?
+				auto verOrNone = node->findDomainForRoom(room);
+				if (verOrNone) {
+					auto ver = *verOrNone;
+					if (client->doesAcceptVersion(ver))
+						return RetType(node, ver);
+				}
 				
 				// Get node throttle value
 				auto it = nodeThrottles.find(node->nodeInfo().nodeName);
@@ -510,10 +520,13 @@ namespace mcore
 					if (it2 == versions.end())
 						continue;
 					
-					
 					// Get version throttle value
 					double versionThrottle = it2->second.throttle;
 					if (versionThrottle <= 0.0)
+						continue;
+					
+					// Client accepts the version?
+					if (!client->doesAcceptVersion(it2->first))
 						continue;
 					
 					// Add as balancer item

@@ -386,6 +386,21 @@ namespace mcore
 		return count;
 	}
 	
+	boost::optional<std::string> MasterNode::findDomainForRoom(const std::string& room)
+	{
+		if (room.empty())
+			return boost::none;
+		
+		std::lock_guard<std::recursive_mutex> lock(domainsMutex);
+		for (const auto& item: domains) {
+			auto it = item.second.rooms.find(room);
+			if (it != item.second.rooms.end())
+				return item.first;
+		}
+		
+		return boost::none;
+	}
+	
 	std::vector<MasterNode::DomainStatus> MasterNode::domainStatuses()
 	{
 		std::vector<DomainStatus> ret;

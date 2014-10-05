@@ -64,6 +64,8 @@ namespace mcore
 		std::size_t numClients();
 		std::size_t numRooms();
 		
+		boost::optional<std::string> findDomainForRoom(const std::string&);
+		
 		struct DomainStatus
 		{
 			std::string versionName;

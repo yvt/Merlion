@@ -135,7 +135,7 @@ namespace mcore
         static Master *fromHandle(MSCMaster handle) { return reinterpret_cast<Master *>(handle); }
 		
 		boost::optional<std::pair<std::shared_ptr<MasterNode>, std::string>>
-		bindClientToDomain(const std::string& room);
+		bindClientToDomain(const std::shared_ptr<MasterClient>& client);
     };
 
     class MasterListener
