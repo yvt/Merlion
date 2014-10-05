@@ -25,6 +25,7 @@ NodeVersionLoader.cpp
 Utils.cpp
 Packet.cpp
 Logging.cpp
+LikeMatcher.cpp
 )
 add_library(MerlionServerCore SHARED ${SOURCE_FILES})
 target_link_libraries(MerlionServerCore ${LIB_LIST})
