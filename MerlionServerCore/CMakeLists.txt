@@ -6,8 +6,8 @@ include_directories(${Boost_INCLUDE_DIRS})
 list(APPEND LIB_LIST ${Boost_LIBRARIES})
 
 find_package(OpenSSL 1.0.1 REQUIRED)
-include_directories(${OpenSSL_INCLUDE_DIRS})
-list(APPEND LIB_LIST ${OpenSSL_LIBRARIES})
+include_directories(${OPENSSL_INCLUDE_DIRS})
+list(APPEND LIB_LIST ${OPENSSL_LIBRARIES})
 
 set(SOURCE_FILES
 Library.cpp
