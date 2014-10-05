@@ -77,10 +77,10 @@
     <Compile Include="Utils\UnclosableStream.cs" />
     <Compile Include="Utils\PipeStream.cs" />
     <Compile Include="Utils\StreamAsyncCopier.cs" />
-    <Compile Include="NativeServerInterop.cs" />
     <Compile Include="NativeMasterServer.cs" />
     <Compile Include="NativeNodeServer.cs" />
     <Compile Include="Utils\InvalidStream.cs" />
+    <Compile Include="NativeServerInterop.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <ItemGroup>

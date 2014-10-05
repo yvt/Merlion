@@ -54,6 +54,12 @@
 /* Begin PBXFileReference section */
 		E81F77D619E162D30094009F /* LikeMatcher.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = LikeMatcher.cpp; sourceTree = "<group>"; };
 		E81F77D719E162D30094009F /* LikeMatcher.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = LikeMatcher.hpp; sourceTree = "<group>"; };
+		E81F78D119E188950094009F /* DummyLog4Net */ = {isa = PBXFileReference; lastKnownFileType = folder; path = DummyLog4Net; sourceTree = "<group>"; };
+		E81F78D219E188950094009F /* Merlion */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Merlion; sourceTree = "<group>"; };
+		E81F78D319E188950094009F /* MerlionServer */ = {isa = PBXFileReference; lastKnownFileType = folder; path = MerlionServer; sourceTree = "<group>"; };
+		E81F78D419E188950094009F /* MerEcho */ = {isa = PBXFileReference; lastKnownFileType = folder; path = MerEcho; sourceTree = "<group>"; };
+		E81F78D519E188950094009F /* MerCat */ = {isa = PBXFileReference; lastKnownFileType = folder; path = MerCat; sourceTree = "<group>"; };
+		E81F78D619E188950094009F /* MerlionSimpleServer */ = {isa = PBXFileReference; lastKnownFileType = folder; path = MerlionSimpleServer; sourceTree = "<group>"; };
 		E833F4F719D4488100B003C0 /* libMerlionServerCore.dylib */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; includeInIndex = 0; path = libMerlionServerCore.dylib; sourceTree = BUILT_PRODUCTS_DIR; };
 		E833F4FB19D4489400B003C0 /* AsyncPipe.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = AsyncPipe.hpp; sourceTree = "<group>"; };
 		E833F4FC19D4489400B003C0 /* CMakeLists.txt */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = CMakeLists.txt; sourceTree = "<group>"; };
@@ -126,9 +132,23 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		E81F78D719E188970094009F /* .NET Assemblies */ = {
+			isa = PBXGroup;
+			children = (
+				E81F78D119E188950094009F /* DummyLog4Net */,
+				E81F78D219E188950094009F /* Merlion */,
+				E81F78D319E188950094009F /* MerlionServer */,
+				E81F78D419E188950094009F /* MerEcho */,
+				E81F78D519E188950094009F /* MerCat */,
+				E81F78D619E188950094009F /* MerlionSimpleServer */,
+			);
+			name = ".NET Assemblies";
+			sourceTree = "<group>";
+		};
 		E833F4E019D4483700B003C0 = {
 			isa = PBXGroup;
 			children = (
+				E81F78D719E188970094009F /* .NET Assemblies */,
 				E833F55819D710B300B003C0 /* libboost_signals.dylib */,
 				E833F55219D7045F00B003C0 /* libboost_filesystem.dylib */,
 				E833F55019D5511B00B003C0 /* libboost_iostreams.dylib */,

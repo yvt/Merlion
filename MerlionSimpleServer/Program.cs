@@ -26,6 +26,7 @@ namespace Merlion.SimpleServer
 			var listener = new TcpListener (new System.Net.IPEndPoint(ip, port));
 			listener.Start ();
 
+			throw new NotImplementedException ();
 			while (true) {
 				var client = listener.AcceptTcpClient ();
 
