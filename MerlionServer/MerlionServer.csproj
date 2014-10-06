@@ -56,11 +56,8 @@
     <Compile Include="Web\WebInterface.cs" />
     <Compile Include="MasterServer.cs" />
     <Compile Include="NodeServer.cs" />
-    <Compile Include="MasterServer.NodeListener.cs" />
-    <Compile Include="MasterServer.ClientListener.cs" />
     <Compile Include="VersionManager.cs" />
     <Compile Include="Protocol.cs" />
-    <Compile Include="MasterServer.Balancer.cs" />
     <Compile Include="Balancer.cs" />
     <Compile Include="ServerLogManager.cs" />
     <Compile Include="DomainManager.cs" />
