@@ -488,6 +488,13 @@ namespace mcore
 		auto buf = std::make_shared<std::vector<char>>(std::move(gen.vector()));
 		std::lock_guard<std::recursive_mutex> lock(socketMutex);
 		
+		if (down) {
+			if (unreliable)
+				return;
+			BOOST_LOG_SEV(log, LogLevel::Error) << "Failed to send " << name << " because not connected to master.";
+			return;
+		}
+		
 		asio::async_write(socket, asio::buffer(*buf), [this, buf, name, unreliable](const boost::system::error_code& err, std::size_t) {
 			std::lock_guard<std::recursive_mutex> lock(socketMutex);
 			try {
