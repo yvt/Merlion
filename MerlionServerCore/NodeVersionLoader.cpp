@@ -55,7 +55,7 @@ namespace mcore
 			return;
 		
 		disposed = true;
-		service.dispatch([this] { cancelAll(); });
+		service.post([this] { cancelAll(); });
 		work.reset();
 		thread.join();
 	}
@@ -78,7 +78,7 @@ namespace mcore
 			downloadQueue.emplace_back(std::move(item));
 		}
 		
-		service.dispatch([this, self]() {
+		service.post([this, self]() {
 			checkQueue();
 		});
 	}

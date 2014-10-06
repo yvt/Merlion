@@ -71,7 +71,7 @@ namespace mcore
 		auto lib = node.library();
 		assert(lib != nullptr);
 		
-		lib->ioService().dispatch([this, createFunc, destroyFunc, dom, self]() {
+		lib->ioService().post([this, createFunc, destroyFunc, dom, self]() {
 			
 			BOOST_LOG_SEV(log, LogLevel::Debug) << "Dispatching the application to accept the client.";
 			

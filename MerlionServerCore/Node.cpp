@@ -670,6 +670,10 @@ extern "C" MSCResult MSCNodeForwardLog(MSCNode node, const MSCLogEntry *entry)
 			MSCThrow(mcore::InvalidArgumentException("entry"));
 		}
 		auto *n = mcore::Node::fromHandle(node);
-		n->sendLog(*entry);
+		MSCLogEntry entry2 = *entry;
+		// FIXME: this might be dispatched after node was destroyed
+		n->library()->ioService().post([entry2, n] {
+			n->sendLog(entry2);
+		});
 	});
 }
