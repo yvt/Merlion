@@ -26,7 +26,7 @@ namespace Merlion.Server
 			if (AppConfiguration.ForwardLogToMaster) {
 				var node = MainClass.NodeServer;
 				if (node != null) {
-					// TODO: node.SendLog (loggingEvent);
+					node.SendLog (loggingEvent);
 				}
 			}
 		}

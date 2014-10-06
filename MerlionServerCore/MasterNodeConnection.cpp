@@ -112,19 +112,19 @@ namespace mcore
 
 				h->service();
 
-            } catch (std::exception& ex) {
-                performShutdownByError(ex);
+            } catch (...) {
+				performShutdownByError(boost::current_exception_diagnostic_information());
             }
         });
 
     }
 
     void MasterNodeConnection::performShutdownByError(
-            const std::exception& ex)
+            const std::string& ex)
 	{
 		auto self = shared_from_this();
 		
-		BOOST_LOG_SEV(log, LogLevel::Warn) << "Shutting down because of an error: " << boost::diagnostic_information(ex);
+		BOOST_LOG_SEV(log, LogLevel::Warn) << "Shutting down because of an error: " << ex;
         shutdown();
     }
 

@@ -57,6 +57,20 @@ namespace mcore
 		r.first->second = attrs::constant<std::string>(host);
 	}
 	
+	void LogEntry::log()
+	{
+		auto core = logging::core::get();
+		logging::attribute_set attrs;
+		attrs.insert("Channel", attrs::constant<std::string>(channel));
+		attrs.insert("Host", attrs::constant<std::string>(host));
+		attrs.insert("Source", attrs::constant<std::string>(source));
+		attrs.insert("Message", attrs::constant<std::string>(message));
+		auto rec = core->open_record(attrs);
+		if (rec) {
+			core->push_record(std::move(rec));
+		}
+	}
+	
 	class CustomLogSink: public boost::log::sinks::basic_sink_backend
 	<sinks::combine_requirements<
 	sinks::concurrent_feeding
@@ -91,14 +105,18 @@ namespace mcore
 			const auto& msg =
 			logging::extract_or_default<std::string>(values["Message"], std::string("(null)"));
 			
+			LogEntry entry;
+			entry.level = sev;
+			entry.source = source;
+			entry.host = host;
+			entry.message = msg;
+			entry.channel = channel;
+			
+			MSCLogEntry centry = entry;
 			
 			std::lock_guard<std::mutex> lock(mutex);
 			for (const auto& s: sinks)
-				s.func(static_cast<MSCLogSeverity>(sev),
-					   source.c_str(),
-					   host.c_str(),
-					   channel.c_str(),
-					   msg.c_str(),
+				s.func(&centry,
 					   s.userdata);
 		}
 		MSCLogSinkHandle addSink(MSCLogSink sink, void *userdata)

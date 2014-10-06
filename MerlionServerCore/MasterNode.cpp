@@ -33,7 +33,7 @@ namespace mcore
         connected(false),
         sendReady(true)
 	{
-		auto channel = str(format("Unknown Node [%s]") % connection->tcpSocket().remote_endpoint());
+		channel = str(format("Unknown Node [%s]") % connection->tcpSocket().remote_endpoint());
 		log.setChannel(channel);
 		connection->setChannelName(channel);
 		
@@ -74,8 +74,8 @@ namespace mcore
                 }
 
                 receiveHeader(dataSize);
-            } catch (std::exception& ex) {
-                connection->performShutdownByError(ex);
+			} catch (...) {
+				connection->performShutdownByError(boost::current_exception_diagnostic_information());
             }
         });
     }
@@ -97,7 +97,7 @@ namespace mcore
                 PacketReader reader(headerBuffer->data(), readCount);
                 _nodeInfo.deserialize(reader);
 				
-				auto channel = str(format("Node:%s [%s]") % _nodeInfo.nodeName % connection->tcpSocket().remote_endpoint());
+				channel = str(format("Node:%s [%s]") % _nodeInfo.nodeName % connection->tcpSocket().remote_endpoint());
 				log.setChannel(channel);
 				connection->setChannelName(channel);
 				
@@ -117,9 +117,9 @@ namespace mcore
 				
 				BOOST_LOG_SEV(log, LogLevel::Info) << "Started receiving commands.";
                 receiveCommand();
-            } catch (std::exception& ex) {
-                connection->performShutdownByError(ex);
-            }
+			} catch (...) {
+				connection->performShutdownByError(boost::current_exception_diagnostic_information());
+			}
         });
     }
 
@@ -143,9 +143,9 @@ namespace mcore
 
 
                 receiveCommandBody(dataSize);
-            } catch (std::exception& ex) {
-                connection->performShutdownByError(ex);
-            }
+			} catch (...) {
+				connection->performShutdownByError(boost::current_exception_diagnostic_information());
+			}
         });
     }
 
@@ -228,8 +228,22 @@ namespace mcore
 						}
 
 					case MasterCommand::Log:
-						MSCThrow(NotImplementedException());
-						
+						{
+							LogEntry entry;
+							entry.level = reader.read<LogLevel>();
+							entry.source = reader.readString();
+							entry.channel = reader.readString();
+							entry.message = reader.readString();
+							entry.host = channel;
+							try {
+								entry.log();
+							} catch (...) {
+								BOOST_LOG_SEV(log, LogLevel::Warn) <<
+								"Error while recording the forwarded log. Ignoring.: " <<
+								boost::current_exception_diagnostic_information();
+							}
+							break;
+						}
 					default:
 						MSCThrow(InvalidDataException(str(format("Invalid command 0x%02x received.") %
 								static_cast<std::uint8_t>(cmd))));
@@ -237,9 +251,10 @@ namespace mcore
 				}
 
                 receiveCommand();
-            } catch (std::exception& ex) {
-                connection->performShutdownByError(ex);
-            }
+            } catch (...) {
+				connection->performShutdownByError
+				(boost::current_exception_diagnostic_information());
+			}
         });
     }
 
@@ -320,8 +335,8 @@ namespace mcore
                     flushSendBuffer();
                 }
 
-            } catch (std::exception& ex) {
-                connection->performShutdownByError(ex);
+			} catch (...) {
+				connection->performShutdownByError(boost::current_exception_diagnostic_information());
             }
         });
     }

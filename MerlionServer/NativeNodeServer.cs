@@ -128,6 +128,33 @@ namespace Merlion.Server
 			native.VersionUnloaded (name);
 		}
 
+		public void SendLog(log4net.Core.LoggingEvent e)
+		{
+			var entry = new NativeServerInterop.LogEntry();
+			var data = e.GetLoggingEventData ();
+			entry.Source = data.LoggerName;
+			entry.Message = data.Message;
+
+			if (data.Properties != null) {
+				entry.Channel = data.Properties ["NDC"] as string;
+				entry.Host = data.Properties ["Node"] as string;
+			}
+
+			if (e.Level.Value <= log4net.Core.Level.Debug.Value) {
+				entry.Severity = NativeServerInterop.LogSeverity.Debug;
+			} else if (e.Level.Value <= log4net.Core.Level.Info.Value) {
+				entry.Severity = NativeServerInterop.LogSeverity.Info;
+			} else if (e.Level.Value <= log4net.Core.Level.Warn.Value) {
+				entry.Severity = NativeServerInterop.LogSeverity.Warn;
+			} else if (e.Level.Value <= log4net.Core.Level.Error.Value) {
+				entry.Severity = NativeServerInterop.LogSeverity.Error;
+			} else {
+				entry.Severity = NativeServerInterop.LogSeverity.Fatal;
+			} 
+
+			native.ForwardLog (entry);
+		}
+
 		public void VersionMissing ()
 		{
 			// TODO

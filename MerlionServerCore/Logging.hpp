@@ -23,12 +23,44 @@ namespace mcore
 	enum class LogLevel : int
 	{
 		Debug = static_cast<int>(MSCLS_Debug),
-		Info = static_cast<int>(MSCLS_Info),
-		Warn = static_cast<int>(MSCLS_Warn),
+		Info =  static_cast<int>(MSCLS_Info),
+		Warn =  static_cast<int>(MSCLS_Warn),
 		Error = static_cast<int>(MSCLS_Error),
-		Fatal = static_cast<int>(MSCLS_Fatal),
+		Fatal = static_cast<int>(MSCLS_Fatal)
 	};
 	
+	struct LogEntry
+	{
+		LogLevel level;
+		std::string source;
+		std::string channel;
+		std::string host;
+		std::string message;
+		
+		LogEntry() = default;
+		LogEntry(const MSCLogEntry& e)
+		{
+			level = static_cast<LogLevel>(e.severity);
+			source = e.source ? e.source : std::string();
+			channel = e.channel ? e.channel : std::string();
+			host = e.host ? e.host : std::string();
+			message = e.message ? e.message : std::string();
+		}
+		
+		operator MSCLogEntry() const
+		{
+			MSCLogEntry e;
+			e.severity = static_cast<MSCLogSeverity>(level);
+			e.source = source.c_str();
+			e.channel = channel.c_str();
+			e.host = host.c_str();
+			e.message = message.c_str();
+			return e;
+		}
+		
+		void log();
+	};
+		
 	class Logger:
 	public boost::log::sources::severity_logger<LogLevel>
 	{

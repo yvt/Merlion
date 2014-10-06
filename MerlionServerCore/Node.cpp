@@ -478,7 +478,7 @@ namespace mcore
 	}
 
 	template <class F>
-	void Node::sendCommand(const std::string& name, F generator)
+	void Node::sendCommand(const std::string& name, F generator, bool unreliable)
 	{
 		PacketGenerator gen;
 		gen.write<std::uint32_t>(0); // Placeholder for size
@@ -488,13 +488,15 @@ namespace mcore
 		auto buf = std::make_shared<std::vector<char>>(std::move(gen.vector()));
 		std::lock_guard<std::recursive_mutex> lock(socketMutex);
 		
-		asio::async_write(socket, asio::buffer(*buf), [this, buf, name](const boost::system::error_code& err, std::size_t) {
+		asio::async_write(socket, asio::buffer(*buf), [this, buf, name, unreliable](const boost::system::error_code& err, std::size_t) {
 			std::lock_guard<std::recursive_mutex> lock(socketMutex);
 			try {
 				if (err) {
 					MSCThrow(boost::system::system_error(err));
 				}
 			} catch (...) {
+				if (unreliable)
+					return;
 				BOOST_LOG_SEV(log, LogLevel::Error) << "Failed to send " << name << ".: " <<
 				boost::current_exception_diagnostic_information();
 				shutdown();
@@ -545,9 +547,15 @@ namespace mcore
 			gen.writeString(room);
 		});
 	}
-	void Node::sendLog()
+	void Node::sendLog(const LogEntry& entry)
 	{
-		MSCThrow(NotImplementedException());
+		sendCommand("Log", [&](PacketGenerator& gen) {
+			gen.write(MasterCommand::Log);
+			gen.write(entry.level);
+			gen.writeString(entry.source);
+			gen.writeString(entry.channel);
+			gen.writeString(entry.message);
+		}, true);
 	}
 	
 	void Node::versionLoaded(const std::string &v)
@@ -648,3 +656,13 @@ extern "C" MSCResult MSCNodeVersionUnloaded(MSCNode node, const char *version)
 	});
 }
 
+extern "C" MSCResult MSCNodeForwardLog(MSCNode node, const MSCLogEntry *entry)
+{
+	return mcore::convertExceptionsToResultCode([&] {
+		if (entry == nullptr) {
+			MSCThrow(mcore::InvalidArgumentException("entry"));
+		}
+		auto *n = mcore::Node::fromHandle(node);
+		n->sendLog(*entry);
+	});
+}

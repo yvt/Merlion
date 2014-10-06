@@ -45,8 +45,25 @@ namespace Merlion.Server
 			MSCLS_Fatal
 		}
 
-		delegate void MSCLogSink(MSCLogSeverity severity, string source, string host, 
-			string channel, string message, IntPtr userdata);
+		struct MSCLogEntry
+		{
+
+			[MarshalAs(UnmanagedType.LPStr)]
+			public string source;
+
+			[MarshalAs(UnmanagedType.LPStr)]
+			public string channel;
+
+			[MarshalAs(UnmanagedType.LPStr)]
+			public string host;
+
+			[MarshalAs(UnmanagedType.LPStr)]
+			public string message;
+
+			public MSCLogSeverity severity;
+		}
+
+		delegate void MSCLogSink([MarshalAs(UnmanagedType.LPStruct)] ref MSCLogEntry entry , IntPtr userdata);
 
 		[DllImport("MerlionServerCore")]
 		static extern MSCResult MSCAddLogSink([MarshalAs(UnmanagedType.FunctionPtr)]MSCLogSink sink, IntPtr userdata, out MSCLogSinkSafeHandle outHandle);
@@ -225,6 +242,10 @@ namespace Merlion.Server
 		[DllImport("MerlionServerCore")]
 		static extern MSCResult MSCNodeVersionUnloaded(
 			MSCNodeSafeHandle node, [MarshalAs(UnmanagedType.LPStr)] string version);
+		[DllImport("MerlionServerCore")]
+		static extern MSCResult MSCNodeForwardLog(
+			MSCNodeSafeHandle node, 
+			[MarshalAs(UnmanagedType.LPStruct)] MSCLogEntry entry);
 
 		[DllImport("MerlionServerCore")]
 		static extern MSCResult MSCNodeBindRoom (
@@ -265,6 +286,25 @@ namespace Merlion.Server
 			default:
 				throw new InvalidOperationException (GetLastError());
 			}
+		}
+
+		public enum LogSeverity
+		{
+			Debug,
+			Info,
+			Warn,
+			Error,
+			Fatal
+		}
+
+		public sealed class LogEntry
+		{
+			public string Source;
+			public string Channel;
+			public string Host;
+			public string Message;
+
+			public LogSeverity Severity;
 		}
 
 		public sealed class MSCLogSinkSafeHandle : Microsoft.Win32.SafeHandles.SafeHandleZeroOrMinusOneIsInvalid
@@ -348,15 +388,12 @@ namespace Merlion.Server
 				MSCAddLogSink (sink, IntPtr.Zero, out handle);
 			}
 
-			static void HandleMSCLogSink (MSCLogSeverity severity, 
-				[MarshalAs(UnmanagedType.LPStr)] string source, 
-				[MarshalAs(UnmanagedType.LPStr)] string host, 
-				[MarshalAs(UnmanagedType.LPStr)] string channel, 
-				[MarshalAs(UnmanagedType.LPStr)] string message, IntPtr userdata)
+			static void HandleMSCLogSink (
+				[MarshalAs(UnmanagedType.LPStruct)] ref MSCLogEntry entry, IntPtr userdata)
 			{
 				try {
 					var data = new log4net.Core.LoggingEventData ();
-					switch (severity) {
+					switch (entry.severity) {
 					case MSCLogSeverity.MSCLS_Debug:
 						data.Level = log4net.Core.Level.Debug;
 						break;
@@ -374,16 +411,16 @@ namespace Merlion.Server
 						break;
 					default:
 						data.Level = log4net.Core.Level.Fatal;
-						log.ErrorFormat ("Unknown severity level {0} specified. Defaults to Fatal.", severity);
+						log.ErrorFormat ("Unknown severity level {0} specified. Defaults to Fatal.", entry.severity);
 						break;
 					}
-					data.LoggerName = source;
+					data.LoggerName = entry.source;
 					data.Properties = new log4net.Util.PropertiesDictionary ();
-					data.Properties ["Node"] = host ?? "Local";
+					data.Properties ["Node"] = entry.host ?? "Local";
 					data.ThreadName = System.Threading.Thread.CurrentThread.Name;
 					data.TimeStamp = DateTime.Now;
-					data.Message = message;
-					data.Properties ["NDC"] = channel ?? "None";
+					data.Message = entry.message;
+					data.Properties ["NDC"] = entry.channel ?? "None";
 					log.Logger.Log (new log4net.Core.LoggingEvent(data));
 				} catch (Exception ex) {
 					log.Error ("Error while forwarding log from native core.", ex);
@@ -558,6 +595,8 @@ namespace Merlion.Server
 				get { return handle; }
 			}
 		}
+
+
 
 		public sealed class ClientSetup
 		{
@@ -736,6 +775,37 @@ namespace Merlion.Server
 				fixed (byte *roomPtr = room) {
 					MSCNodeUnbindRoom (handle, new IntPtr (roomPtr), room.Length);
 				}
+			}
+
+			public void ForwardLog(LogEntry entry)
+			{
+				MSCLogEntry e;
+				switch (entry.Severity) {
+				case LogSeverity.Debug:
+					e.severity = MSCLogSeverity.MSCLS_Debug;
+					break;
+				case LogSeverity.Info:
+					e.severity = MSCLogSeverity.MSCLS_Info;
+					break;
+				case LogSeverity.Warn:
+					e.severity = MSCLogSeverity.MSCLS_Warn;
+					break;
+				case LogSeverity.Error:
+					e.severity = MSCLogSeverity.MSCLS_Error;
+					break;
+				case LogSeverity.Fatal:
+					e.severity = MSCLogSeverity.MSCLS_Fatal;
+					break;
+				default:
+					throw new ArgumentOutOfRangeException ();
+				}
+
+				e.channel = entry.Channel;
+				e.host = entry.Host;
+				e.message = entry.Message;
+				e.source = entry.Source;
+
+				MSCNodeForwardLog (handle, e);
 			}
 
 			public void Dispose()

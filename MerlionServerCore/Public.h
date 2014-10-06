@@ -18,9 +18,11 @@
 
 #ifdef __cplusplus
 extern "C" {
+#else
+#include <stdint.h>
 #endif
 	
-	enum MSCLogSeverity
+	enum MSCLogSeverity : int32_t
 	{
 		MSCLS_Debug = -1,
 		MSCLS_Info = 0,
@@ -28,8 +30,17 @@ extern "C" {
 		MSCLS_Error,
 		MSCLS_Fatal
 	};
+	
+	struct MSCLogEntry
+	{
+		const char *source;
+		const char *channel;
+		const char *host;
+		const char *message;
+		MSCLogSeverity severity;
+	};
 
-	enum MSCResult
+	enum MSCResult : int32_t
 	{
 		MSCR_Success = 0,
 		MSCR_Unknown,
@@ -44,7 +55,7 @@ extern "C" {
 	extern const char *MSCGetLastErrorMessage();
 	
 	typedef void (*MSCLogSink)
-	(MSCLogSeverity severity, const char *source, const char *host, const char *channel, const char *message, void *userdata);
+	(const MSCLogEntry *entry, void *userdata);
 	typedef void *MSCLogSinkHandle;
 	
 	extern MSCResult MSCAddLogSink(MSCLogSink sink, void *userdata, MSCLogSinkHandle *outHandle);
@@ -162,7 +173,8 @@ extern "C" {
 	extern MSCResult MSCNodeBindRoom(MSCNode node, const char *room,
 									 std::int32_t roomNameLen, const char *version);
 	extern MSCResult MSCNodeUnbindRoom(MSCNode node, const char *room,
-									 std::int32_t roomNameLen);
+									   std::int32_t roomNameLen);
+	extern MSCResult MSCNodeForwardLog(MSCNode node, const MSCLogEntry *entry);
 	
 #ifdef __cplusplus
 };

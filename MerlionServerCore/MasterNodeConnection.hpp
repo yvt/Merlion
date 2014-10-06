@@ -67,8 +67,8 @@ namespace mcore
         void shutdown();
 		
 		void setChannelName(const std::string&); // For logging
-
-        void performShutdownByError(const std::exception&);
+		
+		void performShutdownByError(const std::string&);
 
         socketType& tcpSocket();
         template <class Buffer, class Callback>

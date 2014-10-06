@@ -37,6 +37,7 @@ namespace mcore
 
 		std::shared_ptr<MasterNodeConnection> connection;
         NodeInfo _nodeInfo;
+		std::string channel;
 
         PacketGenerator sendBuffer;
         std::recursive_mutex sendMutex;

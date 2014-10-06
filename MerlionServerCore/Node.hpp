@@ -86,14 +86,13 @@ namespace mcore
 		void loadDomainIfNotLoaded(const std::string&);
 		
 		template <class F>
-		void sendCommand(const std::string& name, F gen);
+		void sendCommand(const std::string& name, F gen, bool unreliable = false);
 		void sendHeartbeat();
 		void sendRejectClient(std::uint64_t);
 		void sendVersionLoaded(const std::string&);
 		void sendVersionUnloaded(const std::string&);
 		void sendBindRoom(const std::string& room, const std::string& version);
 		void sendUnbindRoom(const std::string& room);
-		void sendLog();
 	public:
 		Node(const std::shared_ptr<Library>&, const NodeParameters&);
 		~Node();
@@ -107,6 +106,8 @@ namespace mcore
 		void versionUnloaded(const std::string&);
 		void bindRoom(const std::string& room, const std::string& version);
 		void unbindRoom(const std::string& room);
+		
+		void sendLog(const LogEntry&);
 		
 		MSCNode handle() { return reinterpret_cast<MSCNode>(this); }
 		static Node *fromHandle(MSCNode handle) { return reinterpret_cast<Node *>(handle); }
