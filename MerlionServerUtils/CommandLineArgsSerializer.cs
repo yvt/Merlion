@@ -8,6 +8,8 @@ namespace Merlion.Utils
 	{
 		Type type;
 
+
+
 		public CommandLineArgsSerializer(Type type)
 		{
 			if (type == null)
@@ -23,7 +25,8 @@ namespace Merlion.Utils
 
 			foreach (var meth in type.GetMethods(
 				System.Reflection.BindingFlags.Instance |
-				System.Reflection.BindingFlags.NonPublic)) {
+				System.Reflection.BindingFlags.NonPublic |
+				System.Reflection.BindingFlags.Public)) {
 				if (meth.Name.StartsWith("Handle", StringComparison.InvariantCulture)) {
 					var name = meth.Name.Substring (6);
 					var param = meth.GetParameters ();
@@ -71,7 +74,8 @@ namespace Merlion.Utils
 					var name = arg.Substring (1);
 					var meth = type.GetMethod ("Handle" + name,
 						System.Reflection.BindingFlags.Instance |
-						System.Reflection.BindingFlags.NonPublic);
+						System.Reflection.BindingFlags.NonPublic|
+						System.Reflection.BindingFlags.Public);
 					if (meth == null) {
 						throw new CommandLineArgsException (string.Format("Unknown option: '{0}'", arg));
 					}
