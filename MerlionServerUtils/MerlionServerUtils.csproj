@@ -3,10 +3,10 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{7F79C7B6-4768-4779-927B-F8B547CB7C65}</ProjectGuid>
-    <OutputType>Exe</OutputType>
-    <RootNamespace>Merlion.MerCat</RootNamespace>
-    <AssemblyName>MerCat</AssemblyName>
+    <ProjectGuid>{E12D56B3-2392-4AA1-AC3E-38363C141C6B}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <RootNamespace>Merlion.Utils</RootNamespace>
+    <AssemblyName>MerlionServerUtils</AssemblyName>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
@@ -17,7 +17,6 @@
     <DefineConstants>DEBUG;</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-    <Commandlineparameters>-Address 127.0.0.1 -Stress -Concurrency 1 -Interval 100 -ChunkSize 65536</Commandlineparameters>
     <ConsolePause>false</ConsolePause>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
@@ -26,25 +25,14 @@
     <OutputPath>bin\Release</OutputPath>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-    <Externalconsole>true</Externalconsole>
+    <ConsolePause>false</ConsolePause>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
-    <Reference Include="Mono.Security" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="CommandLineArgsSerializer.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
-  <ItemGroup>
-    <ProjectReference Include="..\Merlion\Merlion.csproj">
-      <Project>{0A861EAA-56F9-4200-B1FA-173E3B8AACB2}</Project>
-      <Name>Merlion</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\MerlionServerUtils\MerlionServerUtils.csproj">
-      <Project>{E12D56B3-2392-4AA1-AC3E-38363C141C6B}</Project>
-      <Name>MerlionServerUtils</Name>
-    </ProjectReference>
-  </ItemGroup>
 </Project>

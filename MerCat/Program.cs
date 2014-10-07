@@ -192,44 +192,14 @@ namespace Merlion.MerCat
 
 		public CommandLineArguments(string[] args)
 		{
-			int i = 0;
-			while (i < args.Length) {
-				var arg = args [i];
-				if (arg.Length == 0) {
-					continue;
+			try {
+				new Utils.CommandLineArgsSerializer().DeserializeInplace(this, args);
+			} catch (Utils.CommandLineArgsException ex) {
+				Console.Error.WriteLine (ex.Message);
+				if (ex.InnerException != null) {
+					Console.Error.WriteLine (ex.InnerException.ToString ());
 				}
-				if (arg[0] == '-') {
-					var name = arg.Substring (1);
-					var meth = GetType ().GetMethod ("Handle" + name,
-						System.Reflection.BindingFlags.Instance |
-						System.Reflection.BindingFlags.NonPublic);
-					if (meth == null) {
-						Console.Error.WriteLine ("Unknown option: '{0}'", arg);
-						WriteUsageAndExit ();
-					}
-
-					var param = meth.GetParameters ();
-					try {
-						if (param.Length == 0) {
-							meth.Invoke (this, new object[0]);
-						} else {
-							++i;
-							if (i >= args.Length) {
-								Console.Error.WriteLine ("Option needs argument: '{0}'", arg);
-								Environment.Exit (1);
-							}
-							arg += " " + args[i]; // for error message
-							meth.Invoke (this, new object[] { args[i] });
-						}
-					} catch (System.Reflection.TargetInvocationException ex) {
-						Console.Error.WriteLine ("Error while parsing argument '{0}':", arg);
-						Console.Error.WriteLine (ex.Message);
-					}
-				} else {
-					Console.Error.WriteLine ("Unknown option: '{0}'", arg);
-					WriteUsageAndExit ();
-				}
-				++i;
+				WriteUsageAndExit ();
 			}
 
 			if (Mode == null) {
@@ -243,42 +213,9 @@ namespace Merlion.MerCat
 
 		}
 
-		void WriteUsage()
-		{
-			Console.WriteLine ("USAGE:");
-			Console.WriteLine ();
-
-			foreach (var meth in GetType().GetMethods(
-				System.Reflection.BindingFlags.Instance |
-				System.Reflection.BindingFlags.NonPublic)) {
-				if (meth.Name.StartsWith("Handle", StringComparison.InvariantCulture)) {
-					var name = meth.Name.Substring (6);
-					var param = meth.GetParameters ();
-					if (param.Length == 0) {
-						Console.WriteLine ("-" + name);
-					} else {
-						var paramNameAttrs = param [0].GetCustomAttributes (typeof(DescriptionAttribute), false);
-						var pdesc = param [0].Name.ToUpperInvariant ();
-						if (paramNameAttrs.Length > 0) {
-							pdesc = ((DescriptionAttribute)paramNameAttrs [0]).Description;
-						}
-						Console.WriteLine ("-" + name + " " + pdesc);
-					}
-
-					var desc = meth.GetCustomAttributes (typeof(DescriptionAttribute), false);
-					if (desc.Length > 0) {
-						Console.WriteLine ();
-						Console.WriteLine ("    {0}", ((DescriptionAttribute)desc [0]).Description);
-					}
-
-					Console.WriteLine ();
-				}
-			}
-		}
-
 		void WriteUsageAndExit()
 		{
-			WriteUsage ();
+			new Utils.CommandLineArgsSerializer ().WriteUsage (GetType (), Console.Out);
 			Environment.Exit (1);
 		}
 
