@@ -23,12 +23,19 @@ namespace Merlion.Server
 	{
 		protected override void Append (log4net.Core.LoggingEvent loggingEvent)
 		{
+			var e = new LogEntry (loggingEvent.GetLoggingEventData ());
+
+			if (string.IsNullOrEmpty (e.Host))
+				e.Host = "Local";
+
 			if (AppConfiguration.ForwardLogToMaster) {
 				var node = MainClass.NodeServer;
 				if (node != null) {
-					node.SendLog (loggingEvent);
+					node.SendLog (e);
 				}
 			}
+
+			LogView.Storage.Log (e);
 		}
 	}
 }

@@ -288,25 +288,6 @@ namespace Merlion.Server
 			}
 		}
 
-		public enum LogSeverity
-		{
-			Debug,
-			Info,
-			Warn,
-			Error,
-			Fatal
-		}
-
-		public sealed class LogEntry
-		{
-			public string Source;
-			public string Channel;
-			public string Host;
-			public string Message;
-
-			public LogSeverity Severity;
-		}
-
 		public sealed class MSCLogSinkSafeHandle : Microsoft.Win32.SafeHandles.SafeHandleZeroOrMinusOneIsInvalid
 		{
 			public MSCLogSinkSafeHandle():

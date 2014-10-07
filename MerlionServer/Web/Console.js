@@ -194,37 +194,13 @@ $(function() {
         }
     });
 
-    function formatUpTime(uptime)
+
+    function refreshStatus()
     {
-        if (uptime < 1) {
-            return "< 1s";
-        }
-
-        uptime = Math.round(uptime);
-
-        if (uptime < 60) {
-            return uptime + "s";
-        } else if (uptime < 3600) {
-            var s = uptime % 60;
-            var m = Math.floor(uptime / 60);
-            return m + "m" + s + "s";
-        } else if (uptime < 86400) {
-            var m = Math.floor(uptime / 60) % 60;
-            var h = Math.floor(uptime / 3600);
-            return m + "h" + m + "m";
-        } else {
-            var h = Math.floor(uptime / 3600) % 24;
-            var d = Math.floor(uptime / 86400);
-            return d + "d" + h + "h";
-        }
-    }
-
-	function refreshAll()
-	{
-		$.ajax({
-			url: 'status.json', 
-			dataType: 'json',
-			success: function(data) {
+        $.ajax({
+            url: 'status.json', 
+            dataType: 'json',
+            success: function(data) {
                 var versions = {};
                 var domains = {};
                 var nodes = {};
@@ -259,11 +235,262 @@ $(function() {
                 domainTable.update(domains);
                 nodeTable.update(nodes);
                 versionTable.update(versions);
-			},
-			error: function() {
-				alert("AJAX error.");
-			}
-		});
+            },
+            error: function() {
+                alert("AJAX error.");
+            }
+        });
+    }
+
+    function formatUpTime(uptime)
+    {
+        if (uptime < 1) {
+            return "< 1s";
+        }
+
+        uptime = Math.round(uptime);
+
+        if (uptime < 60) {
+            return uptime + "s";
+        } else if (uptime < 3600) {
+            var s = uptime % 60;
+            var m = Math.floor(uptime / 60);
+            return m + "m" + s + "s";
+        } else if (uptime < 86400) {
+            var m = Math.floor(uptime / 60) % 60;
+            var h = Math.floor(uptime / 3600);
+            return m + "h" + m + "m";
+        } else {
+            var h = Math.floor(uptime / 3600) % 24;
+            var d = Math.floor(uptime / 86400);
+            return d + "d" + h + "h";
+        }
+    }
+
+    var LogView = (function() {
+        function Node() {
+            this.next = null;
+            this.previous = null;
+            this.id = null;
+            this.e = null;
+        }
+        Node.prototype = {};
+        Node.prototype.insert = function(n) {
+            if (n.next !== null || n.previous !== null) {
+                throw new Error("Attempted to insert an already inserted element.");
+            }
+            n.previous = this.previous;
+            n.next = this;
+            this.previous.next = n;
+            this.previous = n;
+            if (n.e !== null) {
+                if (this.e !== null) {
+                    this.e.parentNode.insertBefore(n.e, this.e);
+                } else if (n.previous.e !== null) {
+                    n.previous.e.parentNode.appendChild(n.e);
+                }
+            }
+        };
+        Node.prototype.remove = function() {
+            if (this.next === null || this.previous === null) {
+                throw new Error("Attempted to remove an already removed element.");
+            }
+
+            if (this.e !== null) 
+                this.e.parentNode.removeChild(this.e);
+
+            if (this.next == this.previous) {
+                this.next.previous = null;
+                this.next.next = null;
+            } else {
+                this.next.previous = this.previous;
+                this.previous.next = this.next;
+            }
+            this.next = this.previous = null;
+        };
+
+        function NotLoadedNode() {
+            var self = this;
+
+            this.e = document.createElement('div');
+            this.e.className = 'not-loaded';
+
+            var a = this.a = document.createElement('a');
+            a.innerHTML = 'Load Items';
+            a.onclick = function() {
+                self.onClicked();
+                return false;
+            };
+            a.href = '#';
+            this.e.appendChild(a);
+
+
+            this.loading = false;
+        }
+        NotLoadedNode.prototype = new Node();
+        NotLoadedNode.prototype.onClicked = function() {
+            if (this.loading) {
+                return;
+            }
+
+            var self = this;
+            var data = {};
+
+            if (this.next.id !== null) {
+                data.before = this.next.id - 1;
+            }
+            if (this.previous.id !== null) {
+                data.since = this.previous.id;
+            }
+            data.limit = 100;
+            this.loading = true;
+            this.a.className = 'loading';
+
+            $.ajax({
+                url: 'log.json', 
+                dataType: 'json',
+                data: data,
+                type: 'POST',
+                success: function(ents) {
+                    var p = self.next;
+
+                    for (var i = 0; i < ents.length; ++i) {
+                        if (ents[i].id !== data.since)
+                            p.insert(new LoadedNode(ents[i]));
+                        else
+                            self.remove();
+                    }
+
+                    if (typeof data.before === 'undefined') {
+                        p.insert(new NotLoadedNode());
+                    }
+                    
+                    self.loading = false;
+                    self.a.className = '';
+                },
+                error: function() {
+                    alert("AJAX error.");
+                    self.loading = false;
+                    self.a.className = '';
+                }
+            });
+        };
+
+        function LoadedNode(ent) {
+            this.id = ent.id;
+            this.e = document.createElement('div');
+            this.e.className = 'item severity-' + ent.severity;
+
+            var $e = $(this.e);
+
+            var time = new Date(ent.timestamp);
+
+            $('<span class="timestamp-local">')
+            .text(formatTimestamp(time, true)).appendTo($e);
+            $('<span class="timestamp-utc">')
+            .text(formatTimestamp(time, false)).appendTo($e);
+            $('<span class="host">')
+            .text(ent.host).appendTo($e);
+            $('<span class="source">')
+            .text(ent.source).appendTo($e);
+            if (ent.channel !== null && ent.channel !== '' && ent.channel !== '(null)') {
+                $('<span class="channel">')
+                .text(ent.channel).appendTo($e);
+            }
+            var msg = $('<span class="msg">')
+            .text(ent.msg).appendTo($e);
+
+            if (ent.severity == 'info')
+                $('<span class="glyphicon glyphicon-info-sign">').prependTo(msg);
+            if (ent.severity == 'warn')
+                $('<span class="glyphicon glyphicon-bell">').prependTo(msg);
+            if (ent.severity == 'error')
+                $('<span class="glyphicon glyphicon-warning-sign">').prependTo(msg);
+            if (ent.severity == 'fatal')
+                $('<span class="glyphicon glyphicon-ban-circle">').prependTo(msg);
+
+        }
+        LoadedNode.prototype = new Node();
+
+        function formatTimestamp(dt, local) {
+            var y, m, d, h, m2, s;
+            if (local) {
+                y = dt.getFullYear();
+                m = dt.getMonth() + 1;
+                d = dt.getDate();
+                h = dt.getHours();
+                m2= dt.getMinutes();
+                s = dt.getSeconds();
+            } else {
+                y = dt.getUTCFullYear();
+                m = dt.getUTCMonth() + 1;
+                d = dt.getUTCDate();
+                h = dt.getUTCHours();
+                m2= dt.getUTCMinutes();
+                s = dt.getUTCSeconds();
+            }
+            return zeroFill(y, 4) + '/' + m + '/' + d + ' ' +
+            h + ':' + zeroFill(m2, 2) + ':' + zeroFill(s, 2);
+        }
+
+        function zeroFill(s, nd) {
+            s = String(s);
+            while (s.length < nd) s = '0' + s;
+            return s;
+        }
+
+        var root = new Node();
+        root.next = root.previous = root;
+
+        // Add first item
+        var first = new NotLoadedNode(0);
+        $('#log-view')[0].appendChild(first.e);
+        root.insert(first);
+
+        function refresh()
+        {
+            root.previous.onClicked();
+        }
+
+        function updateFilter()
+        {
+            var classes = [];
+            $.each(['debug', 'info', 'warn', 'error', 'fatal'], function() {
+                if ($('#log-filter-' + this).is(':checked')) {
+                    classes.push('show-' + this);
+                }
+            });
+
+            if ($('#show-local-time').is(':checked'))
+                classes.push('show-local');
+            else
+                classes.push('show-utc');
+
+            $('#log-view')[0].className = classes.join(' ');
+        }
+
+        $.each(['debug', 'info', 'warn', 'error', 'fatal'], function() {
+            $('#log-filter-' + this).change(updateFilter);
+        });
+        $('#show-local-time').change(updateFilter);
+
+        updateFilter();
+
+        return {
+            refresh: refresh,
+            updateFilter: updateFilter
+        };
+    })();
+
+    function refreshLog()
+    {
+        LogView.refresh();
+    }
+
+	function refreshAll()
+	{
+        refreshStatus();
+        refreshLog();
 	}
 
     function handleAjaxApiError(xhr, status) {

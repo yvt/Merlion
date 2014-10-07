@@ -25,6 +25,7 @@
                 <li class="active"><a href="#domains" role="tab" data-toggle="tab">App Domains</a></li>
                 <li><a href="#versions" role="tab" data-toggle="tab">Versions</a></li>
                 <li><a href="#servers" role="tab" data-toggle="tab">Nodes</a></li>
+                <li><a href="#logpane" role="tab" data-toggle="tab">Log</a></li>
             </ul>
 
             <!-- Tab panes -->
@@ -99,6 +100,31 @@
                         <tbody id="server-table">
                         </tbody>
                     </table>
+                </div>
+                <div class="tab-pane" id="logpane">
+                    <form class="form-inline">
+                        <label><input type="checkbox" id="show-local-time"> Local Time</label>
+                        <div class="btn-group btn-inline btn-sm" data-toggle="buttons">
+                            <label class="btn btn-default btn-sm">
+                                <input type="checkbox" id="log-filter-debug"> <span class="glyphicon glyphicon-leaf"></span> Debug
+                            </label>
+                            <label class="btn btn-default btn-sm">
+                                <input type="checkbox" id="log-filter-info"> <span class="glyphicon glyphicon-info-sign"></span> Info
+                            </label>
+                            <label class="btn btn-default btn-sm active">
+                                <input type="checkbox" id="log-filter-warn" checked="checked"> <span class="glyphicon glyphicon-bell"></span> Warn
+                            </label>
+                            <label class="btn btn-default btn-sm active">
+                                <input type="checkbox" id="log-filter-error" checked="checked"> <span class="glyphicon glyphicon-warning-sign"></span> Error
+                            </label>
+                            <label class="btn btn-default btn-sm active">
+                                <input type="checkbox" id="log-filter-fatal" checked="checked"> <span class="glyphicon glyphicon-ban-circle"></span> Fatal
+                            </label>
+                        </div>
+                    </form>
+                    <div id="log-view">
+
+                    </div>
                 </div>
             </div>
 		</div>

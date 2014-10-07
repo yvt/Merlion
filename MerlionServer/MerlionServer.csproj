@@ -78,6 +78,9 @@
     <Compile Include="NativeNodeServer.cs" />
     <Compile Include="Utils\InvalidStream.cs" />
     <Compile Include="NativeServerInterop.cs" />
+    <Compile Include="LogView.cs" />
+    <Compile Include="LogStorages.cs" />
+    <Compile Include="Utils\Deque.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <ItemGroup>

@@ -64,3 +64,98 @@ h1 {
 	line-height: 1.42857143;
 }
 
+#log-view {
+	height: 400px;
+	-webkit-overflow-scrolling: touch;
+	overflow-y: scroll;
+	border: 1px solid #dfdfdf;
+	border-radius: 4px;
+	padding: 2px;
+}
+
+#log-view > div.not-loaded a {
+	display: block;
+	line-height: 32px;
+	font-weight: bold;
+	color: gray;
+	text-align: center;
+	text-decoration: none;
+	border-radius: 3px;
+	margin: 4px 0;
+}
+#log-view > div.not-loaded a:hover {
+	background: #dfdfdf;
+}
+#log-view > div.not-loaded a.loading {
+	-webkit-animation: progress-bar-stripes 2s linear infinite;
+	-o-animation: progress-bar-stripes 2s linear infinite;
+	animation: progress-bar-stripes 2s linear infinite;
+	background-color: #428bca;
+	background-image: -webkit-linear-gradient(45deg,rgba(255,255,255,.15) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.15) 50%,rgba(255,255,255,.15) 75%,transparent 75%,transparent);
+	background-image: -o-linear-gradient(45deg,rgba(255,255,255,.15) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.15) 50%,rgba(255,255,255,.15) 75%,transparent 75%,transparent);
+	background-image: linear-gradient(45deg,rgba(255,255,255,.15) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.15) 50%,rgba(255,255,255,.15) 75%,transparent 75%,transparent);
+	-webkit-background-size: 40px 40px;
+	background-size: 40px 40px;
+	color: transparent;
+	text-indent: -9999px;
+}
+
+#log-view > div.item {
+	margin: 2px 0;
+	padding-left: 1.5em;
+    text-indent: -1.5em;
+    display: none;
+}
+
+#log-view > div.item > span.timestamp-utc,
+#log-view > div.item > span.timestamp-local {
+	display: none;
+}
+
+#log-view.show-utc > div.item > span.timestamp-utc,
+#log-view.show-local > div.item > span.timestamp-local {
+	display: inline;
+}
+
+#log-view.show-debug > div.item.severity-debug,
+#log-view.show-info > div.item.severity-info,
+#log-view.show-warn > div.item.severity-warn,
+#log-view.show-error > div.item.severity-error,
+#log-view.show-fatal > div.item.severity-fatal {
+	display: block;
+}
+
+#log-view > div.item.severity-debug { color: #101010; opacity: 0.6; }
+#log-view > div.item.severity-info { color: #101010; }
+#log-view > div.item.severity-warn { color: #808000; }
+#log-view > div.item.severity-error { color: #a02010; }
+#log-view > div.item.severity-fatal { color: #a02010; font-weight: bold; }
+
+#log-view > div.item > span { margin-right: 5px; }
+
+#log-view > div.item > span.host {
+	background: #333333;
+	border-radius: 3px;
+	color: white;
+	padding: 2px;
+}
+/*
+#log-view > div.item > span.host::before { content: "<"; }
+#log-view > div.item > span.host::after { content: ">"; }
+#log-view > div.item > span.channel::before { content: "["; }
+#log-view > div.item > span.channel::after { content: "]"; }*/
+
+#log-view > div.item > span.msg > span.glyphicon::before {
+	margin-left: 17px;
+	margin-right: -2px;
+}
+
+#log-view > div.item > span.source { opacity: 0.6; }
+
+#log-view > div.item > span.channel {
+	background: #333333;
+	border-radius: 3px;
+	color: white;
+	padding: 2px;
+	opacity: 0.6;
+}

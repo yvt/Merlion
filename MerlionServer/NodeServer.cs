@@ -31,7 +31,7 @@ namespace Merlion.Server
 		VersionManager VersionManager { get; }
 		void SendVersionLoaded(string name);
 		void SendVersionUnloaded(string name);
-		void SendLog(log4net.Core.LoggingEvent e);
+		void SendLog(LogEntry e);
 		void VersionMissing();
 		string Name { get; }
 	}

@@ -64,6 +64,7 @@ namespace Merlion.Server.Web
 
 			handlers.Add ("/deploy", HandleDeploy);
 			handlers.Add ("/status.json", MakeJsonApi(HandleGetStatus));
+			handlers.Add ("/log.json", MakeJsonApi(HandleGetLog));
 			handlers.Add ("/version/throttle/set.json", MakeJsonApi(HandleSetVersionThrottle));
 			handlers.Add ("/version/destroy.json", MakeJsonApi(HandleDestroyVersion));
 			handlers.Add ("/node/throttle/set.json", MakeJsonApi(HandleSetNodeThrottle));
@@ -333,6 +334,51 @@ namespace Merlion.Server.Web
 			};
 			return obj;
 		}
+
+		static readonly DateTime JavaScriptEpoch = new DateTime(1970, 1, 1);
+		object HandleGetLog(HttpServerContext context, IDictionary<string, string> param)
+		{
+			long? since = null;
+			long? before = null;
+			int limit = 100;
+			if (param.ContainsKey ("since"))
+				since = long.Parse (param ["since"]);
+			if (param.ContainsKey ("before"))
+				before = long.Parse (param ["before"]);
+			if (param.ContainsKey ("limit"))
+				limit = int.Parse (param ["limit"]);
+
+			var ents = LogView.Storage.GetLogEntries (since, before, limit, LogSeverity.Debug);
+
+			return ents.Select (e => new Dictionary<string, object> {
+				{ "id", e.Id },
+				{ "timestamp", (e.LogEntry.Timestamp - JavaScriptEpoch).TotalMilliseconds }, 
+				{ "source", e.LogEntry.Source },
+				{ "channel", e.LogEntry.Channel },
+				{ "host", e.LogEntry.Host },
+				{ "msg", e.LogEntry.Message },
+				{ "severity", SeverityToString(e.LogEntry.Severity) }
+			}).ToArray ();
+		}
+
+		string SeverityToString(LogSeverity s)
+		{
+			switch (s) {
+			case LogSeverity.Debug:
+				return "debug";
+			case LogSeverity.Info:
+				return "info";
+			case LogSeverity.Warn:
+				return "warn";
+			case LogSeverity.Error:
+				return "error";
+			case LogSeverity.Fatal:
+				return "fatal";
+			default:
+				throw new ArgumentOutOfRangeException ();
+			}
+		}
+
 
 		object GetVersionInfo()
 		{
