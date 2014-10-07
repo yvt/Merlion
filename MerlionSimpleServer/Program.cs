@@ -5,14 +5,14 @@ using System.Net.Security;
 
 namespace Merlion.SimpleServer
 {
-	sealed class MainClass
+	public sealed class MainClass
 	{
 		static readonly ILog log = LogManager.GetLogger(typeof(MainClass));
-		static public Server.ApplicationServer App;
+		static internal Server.ApplicationServer App;
 		static CommandLineArguments cmdArgs;
-		static public NodeImpl Node;
+		static internal NodeImpl Node;
 
-		static public System.Security.Cryptography.X509Certificates.X509Certificate Certificate;
+		static internal System.Security.Cryptography.X509Certificates.X509Certificate Certificate;
 
 		public static void Main (string[] args)
 		{
