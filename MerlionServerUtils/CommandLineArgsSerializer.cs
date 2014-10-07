@@ -6,7 +6,17 @@ namespace Merlion.Utils
 {
 	public class CommandLineArgsSerializer
 	{
-		public void WriteUsage(Type type, System.IO.TextWriter writer)
+		Type type;
+
+		public CommandLineArgsSerializer(Type type)
+		{
+			if (type == null)
+				throw new ArgumentNullException ("type");
+			this.type = type;
+		}
+
+
+		public void WriteUsage(System.IO.TextWriter writer)
 		{
 			writer.WriteLine ("USAGE:");
 			writer.WriteLine ();
@@ -39,14 +49,17 @@ namespace Merlion.Utils
 			}
 		}
 
-		public void DeserializeInplace(object obj, string[] args)
+		public void DeserializeObjectInplace(object obj, string[] args)
 		{
 			if (obj == null)
 				throw new ArgumentNullException ("obj");
 			if (args == null)
 				throw new ArgumentNullException ("args");
 
-			var type = obj.GetType ();
+			if (!type.IsInstanceOfType (obj)) {
+				throw new InvalidOperationException (string.Format("Type of given object '{0}' cannot be used as '{1}'.",
+					obj.GetType().ToString(), type.ToString()));
+			}
 
 			int i = 0;
 			while (i < args.Length) {
@@ -83,6 +96,17 @@ namespace Merlion.Utils
 				}
 				++i;
 			}
+		}
+	}
+
+	public class CommandLineArgsSerializer<T>: CommandLineArgsSerializer
+	{
+		public CommandLineArgsSerializer(): base(typeof(T))
+		{ }
+
+		public void DeserializeInplace(T obj, string[] args)
+		{
+			DeserializeObjectInplace (obj, args);
 		}
 	}
 

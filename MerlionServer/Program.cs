@@ -140,7 +140,7 @@ namespace Merlion.Server
 		public CommandLineArguments(string[] args)
 		{
 			try {
-				new Merlion.Utils.CommandLineArgsSerializer().DeserializeInplace(this, args);
+				new Merlion.Utils.CommandLineArgsSerializer<CommandLineArguments>().DeserializeInplace(this, args);
 			} catch (Merlion.Utils.CommandLineArgsException ex) {
 				Console.Error.WriteLine (ex.Message);
 				if (ex.InnerException != null) {
@@ -163,7 +163,7 @@ namespace Merlion.Server
 
 		void WriteUsage()
 		{
-			new Merlion.Utils.CommandLineArgsSerializer ().WriteUsage (GetType (), Console.Out);
+			new Merlion.Utils.CommandLineArgsSerializer<CommandLineArguments> ().WriteUsage (Console.Out);
 		}
 
 		void WriteUsageAndExit()

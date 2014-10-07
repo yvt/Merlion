@@ -193,7 +193,7 @@ namespace Merlion.MerCat
 		public CommandLineArguments(string[] args)
 		{
 			try {
-				new Utils.CommandLineArgsSerializer().DeserializeInplace(this, args);
+				new Utils.CommandLineArgsSerializer<CommandLineArguments>().DeserializeInplace(this, args);
 			} catch (Utils.CommandLineArgsException ex) {
 				Console.Error.WriteLine (ex.Message);
 				if (ex.InnerException != null) {
@@ -215,7 +215,7 @@ namespace Merlion.MerCat
 
 		void WriteUsageAndExit()
 		{
-			new Utils.CommandLineArgsSerializer ().WriteUsage (GetType (), Console.Out);
+			new Utils.CommandLineArgsSerializer<CommandLineArguments> ().WriteUsage (Console.Out);
 			Environment.Exit (1);
 		}
 
