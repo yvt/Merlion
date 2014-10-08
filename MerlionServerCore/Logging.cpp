@@ -92,18 +92,19 @@ namespace mcore
 		}
 		void consume(boost::log::record_view const &rec)
 		{
+			std::string def = "(null)";
 			const auto& values = rec.attribute_values();
-			const auto& sev =
+			auto sev =
 			logging::extract_or_default<LogLevel>(values["Severity"], LogLevel::Info);
-			const auto& source =
-			logging::extract_or_default<std::string>(values["Source"], std::string("(null)"));
-			const auto& channel =
-			logging::extract_or_default<std::string>(values["Channel"], std::string("(null)"));
-			const auto& host =
-			logging::extract_or_default<std::string>(values["Host"], std::string("(null)"));
+			auto source =
+			logging::extract_or_default<std::string>(values["Source"], def);
+			auto channel =
+			logging::extract_or_default<std::string>(values["Channel"], def);
+			auto host =
+			logging::extract_or_default<std::string>(values["Host"], def);
 			
-			const auto& msg =
-			logging::extract_or_default<std::string>(values["Message"], std::string("(null)"));
+			auto msg =
+			logging::extract_or_default<std::string>(values["Message"], def);
 			
 			LogEntry entry;
 			entry.level = sev;
