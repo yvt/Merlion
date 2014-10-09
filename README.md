@@ -5,8 +5,8 @@ Merlion: Realtime Network Application Server
 Merlion is an application server for .NET-based realtime network applications 
 with an integrated load balancer.
 
-Architecture
-------------
+What is it?
+-----------
 
 Merlion is designed to handle heavy-load .NET network applications with many
 simultaneous connections by distributing the workload across several 
@@ -17,7 +17,7 @@ web console. Deployment and upgrade of the application can be done with no
 down time. Running more than two versions at once is even possible to evaluate
 the newly created version before it gets ready for public use.
 
-Following diagram shows the standard configuration of Merlion servers.
+Following diagram shows an example configuration of Merlion servers.
 
 ```
          +------------------------+  +------------------------+     
@@ -73,7 +73,6 @@ Master             |  |  Merlion Master Server  |  |
   and extracted as needed. Each version has a name.
 * _Room_ is a kind of token which is created by the application as needed and
   can be used by clients to connect to the certain application domain later.
-
 
 Test Server
 -----------
