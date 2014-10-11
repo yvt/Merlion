@@ -236,7 +236,8 @@ namespace mcore
 		
 		try { sslSocket.shutdown(); } catch (...) { }
 		try { tcpSocket().shutdown(socketType::shutdown_both); } catch (...) { }
-        tcpSocket().close();
+		try { tcpSocket().close(); } catch (...) { }
+		assert(!tcpSocket().is_open());
 		
 		timeoutTimer.cancel();
     }
