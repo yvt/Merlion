@@ -83,10 +83,28 @@ only supports one application domain and one application version.
 
 Using MerlionSimpleServer for production use is not recommended.
 
+Requirements
+------------
+
+* Currently, only Linux and OS X 10.9 Maverics are supported.
+* Mono 3.2.8 or later is required.
+* Boost 1.55.0 or later which was built with the C++ compiler you are going to
+  build MerlionServerCore with.
+* ISO/IEC 14882:2011 (a.k.a. C++11) compliant compiler.
+  Clang is recommended.
+* 
+
 Building
 --------
 
-TODO
+1. Run `cmake .` in MerlionServerCore. 
+   Using Clang instead of GCC is recommended. To instruct CMake to use Clang,
+   pass `-DCMAKE_CXX_COMPILER=/usr/bin/clang++` to CMake.
+2. Build MerlionServerCore by running `make`.
+3. Run `nuget restore` in the source root to download required libraries.
+3. Build .NET solution by running `xbuild` in the source root.
+4. Copy (or make a symbolic link) MerlionServerCore/libMerlionServerCore.so to
+   MerlionServer/bin/Debug/libMerlionServerCore.so.
 
 Configuring Server
 ------------------
