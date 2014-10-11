@@ -1,8 +1,8 @@
 
-Merlion: Realtime Network Application Server
+Merlion: Real-time Network Application Server
 ============================================
 
-Merlion is an application server for .NET-based realtime network applications 
+Merlion is an application server for .NET-based real-time network applications 
 with an integrated load balancer.
 
 What is it?
@@ -91,7 +91,7 @@ TODO
 Configuring Server
 ------------------
 
-Melion server uses the configuration file "MerlionServer.exe.config" which must
+Merlion server uses the configuration file "MerlionServer.exe.config" which must
 be placed at the same location as the executable file (MerlionServer.exe).
 
 ### Master
