@@ -242,7 +242,8 @@ namespace mcore
     }
 	
 	MasterClientResponse::MasterClientResponse(const MasterClient::ptr &client):
-	_client(client)
+	_client(client),
+	done(false)
 	{ }
 	
 	MasterClientResponse::~MasterClientResponse()
