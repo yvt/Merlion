@@ -356,7 +356,11 @@ namespace mcore
 		it->second.clients.emplace(response->client()->id(),
 								   response->client());
 		
+		BOOST_LOG_SEV(log, LogLevel::Debug) <<
+		format("Sending client connect request (id = '%d').") % client->id();
 		sendClientConnected(client->id(), version, client->room());
+		BOOST_LOG_SEV(log, LogLevel::Debug) <<
+		format("Client connect request sent (id = '%d').") % client->id();
 	}
 	
     void MasterNode::versionAdded(Master &, const std::string &version)
