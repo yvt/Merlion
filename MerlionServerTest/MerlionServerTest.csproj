@@ -36,6 +36,7 @@
   <ItemGroup>
     <Compile Include="Test.cs" />
     <Compile Include="TemporaryDirectory.cs" />
+    <Compile Include="TestUtils.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <ItemGroup>
@@ -46,5 +47,12 @@
       <Project>{C2139D01-58D6-413B-96B4-9EB1E87EE454}</Project>
       <Name>MerlionServer</Name>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Resources\" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\TestCertificate.crt" />
+    <EmbeddedResource Include="Resources\TestCertificate.key" />
   </ItemGroup>
 </Project>
