@@ -17,6 +17,7 @@
 using System;
 using log4net;
 using System.Collections.Generic;
+using System.Runtime.Remoting.Lifetime;
 
 namespace Merlion.Server
 {
@@ -27,6 +28,8 @@ namespace Merlion.Server
 			System.Reflection.Assembly.GetExecutingAssembly(), typeof(Domain));
 
 		readonly INodeServer node;
+
+		readonly ClientSponsor sponsor = new ClientSponsor ();
 
 		readonly string baseDirectory;
 
@@ -72,6 +75,7 @@ namespace Merlion.Server
 						args, 
 						null, null);
 
+				sponsor.Register(appServer);
 
 				log.DebugFormat ("{0}: Starting ApplicationServer.", name);
 
@@ -82,6 +86,8 @@ namespace Merlion.Server
 					appDomain.CreateInstanceAndUnwrap(
 						typeof(Utils.PipeStreamFactory).Assembly.FullName,
 						typeof(Utils.PipeStreamFactory).FullName);
+
+				sponsor.Register(pipeFactory);
 
 			} catch (Exception ex) {
 				try { Dispose (); }
@@ -154,6 +160,18 @@ namespace Merlion.Server
 
 		public void Dispose()
 		{
+			try {
+				sponsor.Unregister(appServer);
+			} catch (Exception ex) {
+				log.Warn (string.Format (
+					"{0}: Exception thrown while unregistering ApplicationServer from ClientSponsor. Ignoring.", name), ex);
+			}
+			try {
+				sponsor.Unregister(pipeFactory);
+			} catch (Exception ex) {
+				log.Warn (string.Format (
+					"{0}: Exception thrown while unregistering PipeStreamFactory from ClientSponsor. Ignoring.", name), ex);
+			}
 			if (appServer != null) {
 				try {
 					appServer.Unload();
