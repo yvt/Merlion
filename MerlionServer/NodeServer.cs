@@ -26,7 +26,7 @@ using System.Linq;
 namespace Merlion.Server
 {
 
-	interface INodeServer
+	interface INodeServer: IDisposable
 	{
 		VersionManager VersionManager { get; }
 		void SendVersionLoaded(string name);

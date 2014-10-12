@@ -144,6 +144,11 @@ namespace Merlion.Server
 				return versionManager;
 			}
 		}
+
+		public void Dispose()
+		{
+			native.Dispose ();
+		}
 	}
 }
 

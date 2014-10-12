@@ -21,7 +21,7 @@ using System.Collections.Generic;
 
 namespace Merlion.Server
 {
-	interface IMasterServer
+	interface IMasterServer: IDisposable
 	{
 		Balancer Balancer { get; }
 		NodeStatus[] GetAllNodeInfos ();

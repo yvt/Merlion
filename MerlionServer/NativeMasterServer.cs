@@ -32,16 +32,25 @@ namespace Merlion.Server
 
 		readonly NativeNodeServer localNodeServer;
 
-		public NativeMasterServer ()
-		{
+		readonly System.Threading.Thread saveBalancerConfigThread;
+		volatile bool stopRequested = false;
 
+		static NativeServerInterop.MasterParameters CreateParameters()
+		{
 			var param = new NativeServerInterop.MasterParameters ();
 			param.ClientEndpoint = AppConfiguration.EndpointAddress.ToString ();
 			param.NodeEndpoint = AppConfiguration.MasterServerAddress.ToString ();
 			param.SslCertificateFile = AppConfiguration.MasterServerCertificate;
 			param.SslPrivateKeyFile = AppConfiguration.MasterServerPrivateKey;
-			param.PackagePathProvider = versionManager.GetPackagePathForVersion;
+			return param;
+		}
 
+		public NativeMasterServer ():
+		this(CreateParameters())
+		{ }
+		public NativeMasterServer (NativeServerInterop.MasterParameters param)
+		{
+			param.PackagePathProvider = versionManager.GetPackagePathForVersion;
 			native = new NativeServerInterop.Master (param);
 
 			foreach (var ver in balancer.GetAllVersions()) {
@@ -83,15 +92,25 @@ namespace Merlion.Server
 			localNodeServer = new NativeNodeServer ("Local", new System.Net.IPEndPoint (
 				System.Net.IPAddress.Loopback, AppConfiguration.MasterServerAddress.Port));
 
-			new System.Threading.Thread (() => {
+			saveBalancerConfigThread = new System.Threading.Thread (() => {
 				// "Save balancer config" thread
-				while (true) {
+				while (!stopRequested) {
 					if (balancer.IsModified) {
 						balancer.SaveConfig ();
 					}
-					System.Threading.Thread.Sleep (3000);
+					System.Threading.Thread.Sleep (500);
 				}
-			}).Start ();
+			});
+			saveBalancerConfigThread.Start ();
+		}
+
+		public void Dispose()
+		{
+			stopRequested = true;
+			saveBalancerConfigThread.Join ();
+
+			localNodeServer.Dispose ();
+			native.Dispose ();
 		}
 
 		public VersionManager VersionManager
