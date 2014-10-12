@@ -62,7 +62,7 @@ Master             |  |  Merlion Master Server  |  |
   a _domain_, and makes a bridge between the client and the domain.
   Master server also manages the lifetime of application versions and 
   associated application domains. Master server owns its own node server 
-  called "Local" therefore Merlion can be used on single server configuration 
+  called "Local", therefore Merlion can be used on single server configuration 
   before scaling out the server cluster.
 * _Node server_ is where the application actually run. It creates application 
   domains on which each version of the application is deployed.
@@ -88,11 +88,12 @@ Requirements
 
 * Currently, only Linux and OS X 10.9 Maverics are supported.
 * Mono 3.2.8 or later is required.
+* OpenSSL is required.
 * Boost 1.55.0 or later which was built with the C++ compiler you are going to
   build MerlionServerCore with.
 * ISO/IEC 14882:2011 (a.k.a. C++11) compliant compiler.
-  Clang is recommended.
-* 
+  Clang is recommended (#1).
+
 
 Building
 --------
@@ -129,7 +130,7 @@ TODO
 
 * _NodeName_ is the node's name. Preferred to keep it unique.
 * When _ForwardLogToMaster_ is set to `True`, log messages recorded by the node
-  server is also forwarded to the master server, and are displayed in the
+  server are also forwarded to the master server, and are displayed in the
   web console.
 
 TODO
