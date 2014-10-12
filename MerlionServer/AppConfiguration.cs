@@ -22,9 +22,18 @@ namespace Merlion.Server
 {
 	static class AppConfiguration
 	{
+		static System.Collections.Specialized.NameValueCollection appset;
+
 		public static System.Collections.Specialized.NameValueCollection AppSettings
 		{
-			get { return ConfigurationManager.AppSettings; }
+			get {
+				if (appset == null)
+					appset = ConfigurationManager.AppSettings;
+				return appset; 
+			}
+			set {
+				appset = value;
+			}
 		}
 
 		public static object CreateObject(string text)
@@ -182,9 +191,11 @@ namespace Merlion.Server
 		public static string DeployDirectory
 		{
 			get { 
-				var s = AppConfiguration.AppSettings["DeployDirectory"].Trim();
-				if (string.IsNullOrEmpty(s)) {
+				var s = AppConfiguration.AppSettings["DeployDirectory"];
+				if (string.IsNullOrWhiteSpace (s)) {
 					s = "";
+				} else {
+					s = s.Trim ();
 				}
 				if (!Path.IsPathRooted(s)) {
 					s = System.IO.Path.Combine (BaseDirectory, s);
@@ -197,9 +208,11 @@ namespace Merlion.Server
 		public static string BalancerConfigFilePath
 		{
 			get { 
-				var s = AppConfiguration.AppSettings["BalancerConfigFilePath"].Trim();
-				if (string.IsNullOrEmpty(s)) {
+				var s = AppConfiguration.AppSettings["BalancerConfigFilePath"];
+				if (string.IsNullOrWhiteSpace(s)) {
 					s = "Balancer.config";
+				} else {
+					s = s.Trim ();
 				}
 				if (!Path.IsPathRooted(s)) {
 					s = System.IO.Path.Combine (BaseDirectory, s);
