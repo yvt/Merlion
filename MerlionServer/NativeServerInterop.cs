@@ -115,7 +115,7 @@ namespace Merlion.Server
 		static extern MSCResult MSCLibraryCreate(out MSCLibrarySafeHandle libOut);
 
 		[DllImport("MerlionServerCore")]
-		static extern MSCResult MSCLibraryDestroy(MSCLibrarySafeHandle library);
+		static extern MSCResult MSCLibraryDestroy(IntPtr library);
 
 		[DllImport("MerlionServerCore")]
 		static extern MSCResult MSCMasterCreate(
@@ -124,7 +124,7 @@ namespace Merlion.Server
 			out MSCMasterSafeHandle master);
 
 		[DllImport("MerlionServerCore")]
-		static extern MSCResult MSCMasterDestroy(MSCMasterSafeHandle master);
+		static extern MSCResult MSCMasterDestroy(IntPtr master);
 
 		[DllImport("MerlionServerCore")]
 		static extern MSCResult MSCMasterAddVersion( 
@@ -234,7 +234,7 @@ namespace Merlion.Server
 			out MSCNodeSafeHandle master);
 
 		[DllImport("MerlionServerCore")]
-		static extern MSCResult MSCNodeDestroy(MSCNodeSafeHandle master);
+		static extern MSCResult MSCNodeDestroy(IntPtr master);
 
 		[DllImport("MerlionServerCore")]
 		static extern MSCResult MSCNodeVersionLoaded(
@@ -316,7 +316,7 @@ namespace Merlion.Server
 			protected override bool ReleaseHandle ()
 			{
 				try {
-					CheckResult (MSCLibraryDestroy (this));
+					CheckResult (MSCLibraryDestroy (handle));
 				} catch (Exception) {  return false; }
 				return true;
 			}
@@ -333,8 +333,8 @@ namespace Merlion.Server
 			protected override bool ReleaseHandle ()
 			{
 				try {
-					CheckResult (MSCMasterDestroy (this));
-				} catch (Exception) {  return false; }
+					CheckResult (MSCMasterDestroy (handle));
+				} catch (Exception ex) {  return false; }
 				return true;
 			}
 		}
@@ -350,7 +350,7 @@ namespace Merlion.Server
 			protected override bool ReleaseHandle ()
 			{
 				try {
-					CheckResult (MSCNodeDestroy (this));
+					CheckResult (MSCNodeDestroy (handle));
 				} catch (Exception) {  return false; }
 				return true;
 			}
