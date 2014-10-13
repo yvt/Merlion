@@ -147,6 +147,14 @@ namespace Merlion.Utils
 			WriteUsageHeader (System.Reflection.Assembly.GetCallingAssembly ());
 		}
 
+		static T GetAssemblyAttribute<T>(System.Reflection.Assembly asm) where T : Attribute
+		{
+			var arr = asm.GetCustomAttributes (typeof(T), true);
+			if (arr.Length == 0)
+				return null;
+			return (T)arr [0];
+		}
+
 		public void WriteUsageHeader(System.Reflection.Assembly asm)
 		{
 			Console.WriteLine ();
@@ -154,9 +162,11 @@ namespace Merlion.Utils
 			Console.WriteLine ("  ----------------------");
 			Console.WriteLine ("  {0} {1}",
 				asm.GetName().Version,
-				((System.Reflection.AssemblyDescriptionAttribute)
-					asm.GetCustomAttributes (
-						typeof(System.Reflection.AssemblyDescriptionAttribute), true) [0]).Description);
+				GetAssemblyAttribute<System.Reflection.AssemblyDescriptionAttribute>(asm).Description);
+			Console.WriteLine ("  {0}",
+				GetAssemblyAttribute<System.Reflection.AssemblyCopyrightAttribute>(asm).Copyright);
+			Console.WriteLine ("  {0}",
+				GetAssemblyAttribute<System.Reflection.AssemblyTrademarkAttribute>(asm).Trademark);
 			Console.WriteLine ();
 			Console.WriteLine ();
 		}

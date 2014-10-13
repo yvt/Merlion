@@ -22,12 +22,15 @@ using System.Runtime.CompilerServices;
 
 [assembly: AssemblyTitle ("MerlionServer")]
 [assembly: AssemblyDescription ("$Id$")]
-[assembly: AssemblyConfiguration ("")]
-[assembly: AssemblyCompany ("")]
-[assembly: AssemblyProduct ("")]
-[assembly: AssemblyCopyright ("yvt")]
-[assembly: AssemblyTrademark ("")]
-[assembly: AssemblyCulture ("")]
+#if DEBUG
+[assembly: AssemblyConfiguration("Debug")]
+#else
+[assembly: AssemblyConfiguration("Release")]
+#endif
+[assembly: AssemblyCompany ("yvt")]
+[assembly: AssemblyProduct ("Merlion")]
+[assembly: AssemblyCopyright ("Copyright © 2014 yvt <i@yvt.jp>. Apache License 2.0 applies.")]
+[assembly: AssemblyTrademark ("Merlion™")]
 
 // The assembly version has the format "{Major}.{Minor}.{Build}.{Revision}".
 // The form "{Major}.{Minor}.*" will automatically update the build and revision,
