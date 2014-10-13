@@ -74,6 +74,12 @@ Master             |  |  Merlion Master Server  |  |
 * _Room_ is a kind of token which is created by the application as needed and
   can be used by clients to connect to the certain application domain later.
 
+Screenshots
+-----------
+
+![Web Console](https://dl.dropboxusercontent.com/u/37804131/github/Screen%20Shot%202014-10-13%20at%209.44.57%20PM.png)
+
+
 Test Server
 -----------
 
