@@ -212,7 +212,7 @@ namespace mcore
 		connectAsync();
 		
 		BOOST_LOG_SEV(log, LogLevel::Info) <<
-		format("Merlion Node Server Core (%s) running.") % MSC_IDENT;
+		format("Merlion Node Server Core (%s) running.") % MSC_VERSION_STRING;
 	}
 	
 	void Node::onBeingDestroyed(Library &)

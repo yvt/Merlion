@@ -132,7 +132,7 @@ namespace mcore
         doHeartbeat(boost::system::error_code());
 		
 		BOOST_LOG_SEV(log, LogLevel::Info) <<
-		format("Merlion Master Server Core (%s) running.") % MSC_IDENT;
+		format("Merlion Master Server Core (%s) running.") % MSC_VERSION_STRING;
     }
 
     void Master::checkValid() const
