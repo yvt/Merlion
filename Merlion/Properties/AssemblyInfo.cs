@@ -31,7 +31,6 @@ using System.Runtime.CompilerServices;
 [assembly: AssemblyProduct ("Merlion")]
 [assembly: AssemblyCopyright ("Copyright © 2014 yvt <i@yvt.jp>. Apache License 2.0 applies.")]
 [assembly: AssemblyTrademark ("Merlion™")]
-[assembly: AssemblyCulture ("en-US")]
 
 [assembly: InternalsVisibleTo("MerlionServer")]
 [assembly: InternalsVisibleTo("MerlionSimpleServer")]
