@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Specialized;
+using System.IO;
+using System.Xml;
 
 namespace Merlion.Server.Test
 {
@@ -40,6 +42,40 @@ namespace Merlion.Server.Test
 			using (var s2 = System.IO.File.OpenWrite(AppConfiguration.MasterServerPrivateKey)) {
 				s.CopyTo (s2);
 			}
+		}
+
+		public static Stream CreateApplicationPackage(Type appType)
+		{
+			if (!typeof(Application).IsAssignableFrom(appType)) {
+				throw new InvalidOperationException(
+					string.Format("Type '{0}' is not an Application.", appType.FullName));
+			}
+
+			var asm = appType.Assembly;
+			var zip = new Ionic.Zip.ZipFile (null, Console.Error);
+
+			zip.AddFile (asm.Location, "");
+
+			zip.AddEntry ("MerlionApplicaiton.config", (ename, stream) => {
+				var xd = new XmlDocument();
+
+				var e = xd.CreateElement("MerlionApplication");
+				e.SetAttribute("TypeName", appType.FullName);
+				xd.AppendChild(e);
+
+				xd.Save(stream);
+			});
+
+			var ms = new System.IO.MemoryStream ();
+			try {
+				zip.Save(ms);
+			} catch {
+				ms.Dispose ();
+				throw;
+			}
+			ms.Position = 0;
+
+			return ms;
 		}
 	}
 }

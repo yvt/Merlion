@@ -32,6 +32,10 @@
     <Reference Include="nunit.framework">
       <HintPath>..\packages\NUnit.2.6.3\lib\nunit.framework.dll</HintPath>
     </Reference>
+    <Reference Include="Ionic.Zip">
+      <HintPath>..\packages\DotNetZip.1.9.3\lib\net20\Ionic.Zip.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Test.cs" />
@@ -46,6 +50,14 @@
     <ProjectReference Include="..\MerlionServer\MerlionServer.csproj">
       <Project>{C2139D01-58D6-413B-96B4-9EB1E87EE454}</Project>
       <Name>MerlionServer</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\MerEcho\MerEcho.csproj">
+      <Project>{2E12801E-78DB-4591-AA37-28625ED9D6B1}</Project>
+      <Name>MerEcho</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Merlion\Merlion.csproj">
+      <Project>{0A861EAA-56F9-4200-B1FA-173E3B8AACB2}</Project>
+      <Name>Merlion</Name>
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
