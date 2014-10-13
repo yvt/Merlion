@@ -142,6 +142,25 @@ namespace Merlion.Utils
 			return new string (cap.ToArray ());
 		}
 
+		public void WriteUsageHeader()
+		{
+			WriteUsageHeader (System.Reflection.Assembly.GetCallingAssembly ());
+		}
+
+		public void WriteUsageHeader(System.Reflection.Assembly asm)
+		{
+			Console.WriteLine ();
+			Console.WriteLine ("  {0}", asm.GetName().Name);
+			Console.WriteLine ("  ----------------------");
+			Console.WriteLine ("  {0} {1}",
+				asm.GetName().Version,
+				((System.Reflection.AssemblyDescriptionAttribute)
+					asm.GetCustomAttributes (
+						typeof(System.Reflection.AssemblyDescriptionAttribute), true) [0]).Description);
+			Console.WriteLine ();
+			Console.WriteLine ();
+		}
+
 		public void WriteUsage(System.IO.TextWriter writer)
 		{
 			writer.WriteLine ("USAGE:");

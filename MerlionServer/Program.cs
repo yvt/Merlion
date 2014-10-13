@@ -163,6 +163,7 @@ namespace Merlion.Server
 
 		void WriteUsage()
 		{
+			new Merlion.Utils.CommandLineArgsSerializer<CommandLineArguments> ().WriteUsageHeader ();
 			new Merlion.Utils.CommandLineArgsSerializer<CommandLineArguments> ().WriteUsage (Console.Out);
 		}
 

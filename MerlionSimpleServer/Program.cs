@@ -71,6 +71,7 @@ namespace Merlion.SimpleServer
 
 		void WriteUsageAndExit()
 		{
+			new Utils.CommandLineArgsSerializer<CommandLineArguments> ().WriteUsageHeader ();
 			new Utils.CommandLineArgsSerializer<CommandLineArguments> ().WriteUsage (Console.Out);
 			Environment.Exit (1);
 		}
