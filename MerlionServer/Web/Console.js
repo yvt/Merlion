@@ -230,6 +230,7 @@ $(function() {
                     nodes[this.id] = this;
                 });
 
+                document.title = data.name + " - Merlion Web Console";
                 $('#server-name').text(data.name);
                 $('#about-server').text(
                     data.master.name + "\n" + data.master.version + " " +
@@ -272,6 +273,7 @@ $(function() {
     }
 
     var LogView = (function() {
+        var currentSeverityFilter = null;
         function Node() {
             this.next = null;
             this.previous = null;
@@ -304,13 +306,16 @@ $(function() {
                 this.e.parentNode.removeChild(this.e);
 
             if (this.next == this.previous) {
-                this.next.previous = null;
-                this.next.next = null;
+                this.next.previous = this.next;
+                this.next.next = this.next;
             } else {
                 this.next.previous = this.previous;
                 this.previous.next = this.next;
             }
             this.next = this.previous = null;
+        };
+        Node.prototype.isLinked = function() {
+            return this.next !== null;
         };
 
         function NotLoadedNode() {
@@ -338,7 +343,9 @@ $(function() {
             }
 
             var self = this;
-            var data = {};
+            var data = {
+                severity: currentSeverityFilter
+            };
 
             if (this.next.id !== null) {
                 data.before = this.next.id - 1;
@@ -347,6 +354,10 @@ $(function() {
                 data.since = this.previous.id;
             }
             data.limit = 100;
+            if (this.next == this.previous) {
+                // Initial view must has a few items
+                data.limit = 20;
+            }
             this.loading = true;
             this.a.className = 'loading';
 
@@ -356,6 +367,10 @@ $(function() {
                 data: data,
                 type: 'POST',
                 success: function(ents) {
+                    if (!self.isLinked()) {
+                        return;
+                    }
+
                     var p = self.next;
 
                     for (var i = 0; i < ents.length; ++i) {
@@ -365,7 +380,7 @@ $(function() {
                             self.remove();
                     }
 
-                    if (typeof data.before === 'undefined') {
+                    if (typeof data.before === 'undefined' && ents.length > 0) {
                         p.insert(new NotLoadedNode());
                     }
                     
@@ -459,11 +474,6 @@ $(function() {
         function updateFilter()
         {
             var classes = [];
-            $.each(['debug', 'info', 'warn', 'error', 'fatal'], function() {
-                if ($('#log-filter-' + this).is(':checked')) {
-                    classes.push('show-' + this);
-                }
-            });
 
             if ($('#show-local-time').is(':checked'))
                 classes.push('show-local');
@@ -473,8 +483,35 @@ $(function() {
             $('#log-view')[0].className = classes.join(' ');
         }
 
+        currentSeverityFilter = 'warn';
+
+        function severityFilterChanged() {
+            var lastval = currentSeverityFilter;
+            var self = this;
+            currentSeverityFilter = null;
+            $.each(['debug', 'info', 'warn', 'error', 'fatal'], function() {
+                if ($('#log-filter-' + this)[0] == self) {
+                    currentSeverityFilter = this;
+                }
+            });
+            if (currentSeverityFilter === null)
+                throw new Error("Severity is null");
+
+            if (currentSeverityFilter === lastval)
+                return;
+
+            // Remove all items
+            while (root.previous !== root)
+                root.previous.remove();
+
+            first = new NotLoadedNode(0);
+            $('#log-view')[0].appendChild(first.e);
+            root.insert(first);
+            first.onClicked();
+        }
+
         $.each(['debug', 'info', 'warn', 'error', 'fatal'], function() {
-            $('#log-filter-' + this).change(updateFilter);
+            $('#log-filter-' + this).change(severityFilterChanged);
         });
         $('#show-local-time').change(updateFilter);
 

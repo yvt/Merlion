@@ -17,8 +17,7 @@ p.pre {
 
 header#main-header {
 	background: url(Gradient1.jpg) 50% 100% no-repeat;
-	position: -webkit-sticky;
-  	position: sticky;
+	position: relative;
 }
 
 header > div.container {
@@ -27,7 +26,6 @@ header > div.container {
 
 header > div#gradient {
 	position: absolute;
-	z-index: -1;
 	left: 0; right: 0;
 	bottom: 0; height: 32px;
 	background: url(Gradient2.png) 50% 100% repeat-x;
@@ -71,6 +69,14 @@ header p { margin: 0; }
 	font-weight: bold;
 }
 
+#main-tabs {
+	position: -webkit-sticky;
+	position: sticky;
+	top: 0;
+	background: #fefefe;
+	z-index: 10;
+}
+
 .table-condensed {
 	font-size: 12px;
 }
@@ -86,15 +92,16 @@ header p { margin: 0; }
 }
 
 #logpane > form {
-	margin: 5px;
+	padding: 5px;
+	position: -webkit-sticky;
+	position: sticky;
+	top: 27px;
+	background: #fefefe;
+	z-index: 10;
+	border-bottom: 1px solid #dfdfdf;
 }
 
 #log-view-wrapper {
-	height: 400px;
-	-webkit-overflow-scrolling: touch;
-	overflow-y: scroll;
-	border: 1px solid #dfdfdf;
-	border-radius: 4px;
 	padding: 2px;
 }
 #log-view {
@@ -134,7 +141,7 @@ header p { margin: 0; }
 	margin: 2px 0;
 	padding-left: 1.5em;
     text-indent: -1.5em;
-    display: none;
+    display: block;
 }
 
 #log-view > div.item > span.timestamp-utc,
@@ -146,7 +153,7 @@ header p { margin: 0; }
 #log-view.show-local > div.item > span.timestamp-local {
 	display: inline;
 }
-
+/*
 #log-view.show-debug > div.item.severity-debug,
 #log-view.show-info > div.item.severity-info,
 #log-view.show-warn > div.item.severity-warn,
@@ -154,7 +161,7 @@ header p { margin: 0; }
 #log-view.show-fatal > div.item.severity-fatal {
 	display: block;
 }
-
+*/
 #log-view > div.item.severity-debug { color: #44; opacity: 0.6; }
 #log-view > div.item.severity-info { color: #444; }
 #log-view > div.item.severity-warn { color: #808000; }

@@ -321,14 +321,38 @@ namespace Merlion.Server.Web
 			long? since = null;
 			long? before = null;
 			int limit = 100;
+			var minSeverity = LogSeverity.Debug;
+
 			if (param.ContainsKey ("since"))
 				since = long.Parse (param ["since"]);
 			if (param.ContainsKey ("before"))
 				before = long.Parse (param ["before"]);
 			if (param.ContainsKey ("limit"))
 				limit = int.Parse (param ["limit"]);
+			if (param.ContainsKey ("severity")) {
+				switch (param["severity"]) {
+				case "debug":
+					minSeverity = LogSeverity.Debug;
+					break;
+				case "info":
+					minSeverity = LogSeverity.Info;
+					break;
+				case "warn":
+					minSeverity = LogSeverity.Warn;
+					break;
+				case "error":
+					minSeverity = LogSeverity.Error;
+					break;
+				case "fatal":
+					minSeverity = LogSeverity.Fatal;
+					break;
+				default:
+					throw new InvalidOperationException (
+						string.Format ("Invalid severity level: '{0}'", param ["severity"]));
+				}
+			}
 
-			var ents = LogView.Storage.GetLogEntries (since, before, limit, LogSeverity.Debug);
+			var ents = LogView.Storage.GetLogEntries (since, before, limit, minSeverity);
 
 			return ents.Select (e => new Dictionary<string, object> {
 				{ "id", e.Id },

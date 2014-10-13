@@ -29,7 +29,7 @@
             </div>
 
             <!-- Nav tabs -->
-            <ul class="nav nav-tabs" role="tablist">
+            <ul class="nav nav-tabs" role="tablist" id="main-tabs">
                 <li class="active"><a href="#domains" role="tab" data-toggle="tab">App Domains</a></li>
                 <li><a href="#versions" role="tab" data-toggle="tab">Versions</a></li>
                 <li><a href="#servers" role="tab" data-toggle="tab">Nodes</a></li>
@@ -115,19 +115,19 @@
                         <label><input type="checkbox" id="show-local-time"> Local Time</label>
                         <div class="btn-group btn-inline btn-sm" data-toggle="buttons">
                             <label class="btn btn-default btn-sm">
-                                <input type="checkbox" id="log-filter-debug"> <span class="glyphicon glyphicon-leaf"></span> Debug
+                                <input type="radio" id="log-filter-debug"> <span class="glyphicon glyphicon-leaf"></span> Debug
                             </label>
                             <label class="btn btn-default btn-sm">
-                                <input type="checkbox" id="log-filter-info"> <span class="glyphicon glyphicon-info-sign"></span> Info
+                                <input type="radio" id="log-filter-info"> <span class="glyphicon glyphicon-info-sign"></span> Info
                             </label>
                             <label class="btn btn-default btn-sm active">
-                                <input type="checkbox" id="log-filter-warn" checked="checked"> <span class="glyphicon glyphicon-bell"></span> Warn
+                                <input type="radio" id="log-filter-warn" checked="checked"> <span class="glyphicon glyphicon-bell"></span> Warn
                             </label>
-                            <label class="btn btn-default btn-sm active">
-                                <input type="checkbox" id="log-filter-error" checked="checked"> <span class="glyphicon glyphicon-warning-sign"></span> Error
+                            <label class="btn btn-default btn-sm">
+                                <input type="radio" id="log-filter-error"> <span class="glyphicon glyphicon-warning-sign"></span> Error
                             </label>
-                            <label class="btn btn-default btn-sm active">
-                                <input type="checkbox" id="log-filter-fatal" checked="checked"> <span class="glyphicon glyphicon-ban-circle"></span> Fatal
+                            <label class="btn btn-default btn-sm">
+                                <input type="radio" id="log-filter-fatal"> <span class="glyphicon glyphicon-ban-circle"></span> Fatal
                             </label>
                         </div>
                     </form>
