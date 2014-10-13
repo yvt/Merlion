@@ -24,6 +24,7 @@
 #include "MasterNode.hpp"
 #include "MasterClient.hpp"
 #include "Balancer.hpp"
+#include "Version.h"
 
 namespace asio = boost::asio;
 namespace ssl = boost::asio::ssl;
@@ -130,7 +131,8 @@ namespace mcore
 		BOOST_LOG_SEV(log, LogLevel::Debug) << "Starting heartbeat.";
         doHeartbeat(boost::system::error_code());
 		
-		BOOST_LOG_SEV(log, LogLevel::Info) << "Initialization done.";
+		BOOST_LOG_SEV(log, LogLevel::Info) <<
+		format("Merlion Master Server Core (%s) running.") % MSC_IDENT;
     }
 
     void Master::checkValid() const

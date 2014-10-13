@@ -23,6 +23,7 @@
 #include "NodeClient.hpp"
 #include "NodeDomain.hpp"
 #include "NodeVersionLoader.hpp"
+#include "Version.h"
 
 namespace asio = boost::asio;
 using boost::format;
@@ -209,6 +210,9 @@ namespace mcore
 		std::lock_guard<std::recursive_mutex> lock(socketMutex);
 		asyncDoneMutex.lock();
 		connectAsync();
+		
+		BOOST_LOG_SEV(log, LogLevel::Info) <<
+		format("Merlion Node Server Core (%s) running.") % MSC_IDENT;
 	}
 	
 	void Node::onBeingDestroyed(Library &)
