@@ -144,7 +144,7 @@ namespace mcore
             h->connectionShutdown();
 
 		try { tcpSocket().shutdown(socketType::shutdown_both); } catch(...) { }
-        tcpSocket().cancel();
+		try { tcpSocket().cancel(); } catch (...) { }
 
         if (h != nullptr)
             h->connectionShutdownDone();

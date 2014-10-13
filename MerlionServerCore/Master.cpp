@@ -239,14 +239,14 @@ namespace mcore
         clientAcceptor.async_accept(waitingClient->tcpSocket(),
         [=](const boost::system::error_code& errorCode) {
             if (errorCode.value() == boost::asio::error::operation_aborted || disposed) {
-                nodeAcceptorMutex.unlock();
+                clientAcceptorMutex.unlock();
                 return;
             } else if (errorCode) {
 				if (initial) {
 					BOOST_LOG_SEV(log, LogLevel::Fatal) <<
 					format("Accepting client connection failed: %s.") % errorCode;
 				}
-				nodeAcceptorMutex.unlock();
+				clientAcceptorMutex.unlock();
 				return;
             } else {
 				// New client connected.
@@ -371,9 +371,9 @@ namespace mcore
             heartbeatRunning = false;
             heartbeatTimer.cancel();
         }
-
-        nodeAcceptor.close();
-        clientAcceptor.close();
+		
+		nodeAcceptor.cancel();
+		clientAcceptor.cancel();
 
         // Wait until node/client acceptor is closed
         nodeAcceptorMutex.lock();
@@ -385,6 +385,9 @@ namespace mcore
 		
 		waitingClient->shutdown();
 		waitingClient.reset();
+		
+		nodeAcceptor.close();
+		clientAcceptor.close();
 		
 		// Reject all pending clients
 		std::vector<PendingClient> pclientList;

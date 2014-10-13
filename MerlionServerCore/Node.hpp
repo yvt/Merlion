@@ -61,6 +61,9 @@ namespace mcore
 		boost::asio::ip::tcp::socket socket;
 		std::recursive_mutex socketMutex;
 		volatile bool down;
+		volatile bool beingDisposed;
+		
+		std::mutex asyncDoneMutex;
 		
 		std::unordered_set<std::string> versionsToLoad;
 		std::shared_ptr<NodeVersionLoader> versionLoader;

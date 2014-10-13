@@ -145,7 +145,8 @@ namespace mcore
 	timeoutTimer(library->ioService()),
 	reconnectTimer(library->ioService()),
 	endpoint(parseTcpEndpoint(parameters.masterEndpoint)),
-	down(true)
+	down(true),
+	beingDisposed(false)
 	{
 		BOOST_LOG_SEV(log, LogLevel::Info) << "Starting as '" << parameters.nodeName << "'.";
 		
@@ -205,6 +206,8 @@ namespace mcore
 			versionsToLoad.erase(version);
 		});
 		
+		std::lock_guard<std::recursive_mutex> lock(socketMutex);
+		asyncDoneMutex.lock();
 		connectAsync();
 	}
 	
@@ -219,14 +222,21 @@ namespace mcore
 			return;
 		}
 		
+		beingDisposed = true;
+		
 		versionLoader->shutdown();
 		versionLoader.reset();
 		
-		std::lock_guard<std::recursive_mutex> lock(socketMutex);
-		shutdown();
+		{
+			std::lock_guard<std::recursive_mutex> lock(socketMutex);
+			shutdown();
+			
+			timeoutTimer.cancel();
+			reconnectTimer.cancel();
+		}
 		
-		timeoutTimer.cancel();
-		reconnectTimer.cancel();
+		// Wait until all async operations are done
+		asyncDoneMutex.lock();
 		
 		_library = nullptr;
 		
@@ -257,9 +267,14 @@ namespace mcore
 	
 	void Node::shutdown()
 	{
-		BOOST_LOG_SEV(log, LogLevel::Info) << "Shutting down.";
 		
 		std::lock_guard<std::recursive_mutex> lock(socketMutex);
+		if (down) {
+			BOOST_LOG_SEV(log, LogLevel::Debug) << "Tried to shut down, but node is already down.";
+			return;
+		}
+		
+		BOOST_LOG_SEV(log, LogLevel::Info) << "Shutting down.";
 		down = true;
 		try { socket.close(); } catch (...) { }
 		
@@ -276,10 +291,19 @@ namespace mcore
 	
 	void Node::scheduleReconnect()
 	{
+		if (beingDisposed) {
+			BOOST_LOG_SEV(log, LogLevel::Debug) << "NOT scheduling reconnection. Node is being down.";
+			asyncDoneMutex.unlock();
+			return;
+		}
 		BOOST_LOG_SEV(log, LogLevel::Info) << "Scheduling reconnection.";
 		reconnectTimer.expires_from_now(boost::posix_time::seconds(5));
 		reconnectTimer.async_wait([this](const boost::system::error_code& error) {
-			if (error) return;
+			if (error) {
+				BOOST_LOG_SEV(log, LogLevel::Debug) << "Reconnection cancelled.";
+				asyncDoneMutex.unlock();
+				return;
+			}
 			connectAsync();
 		});
 	}
@@ -290,23 +314,29 @@ namespace mcore
 		
 		std::lock_guard<std::recursive_mutex> lock(socketMutex);
 		
-		socket.async_connect(endpoint, [this](const boost::system::error_code& error) {
-			std::lock_guard<std::recursive_mutex> lock(socketMutex);
-								 
-			try {
-				if (error) {
-					MSCThrow(boost::system::system_error(error));
-				}
+		try {
+			socket.async_connect(endpoint, [this](const boost::system::error_code& error) {
+				std::lock_guard<std::recursive_mutex> lock(socketMutex);
 				
-				BOOST_LOG_SEV(log, LogLevel::Info) << "Connected.";
-				sendHeader();
-			} catch (...) {
-				BOOST_LOG_SEV(log, LogLevel::Error) << "Failed to connect.: " <<
-				boost::current_exception_diagnostic_information();
-				shutdown();
-				scheduleReconnect();
-			}
-		});
+				try {
+					if (error) {
+						MSCThrow(boost::system::system_error(error));
+					}
+					
+					BOOST_LOG_SEV(log, LogLevel::Info) << "Connected.";
+					sendHeader();
+				} catch (...) {
+					BOOST_LOG_SEV(log, LogLevel::Error) << "Failed to connect.: " <<
+					boost::current_exception_diagnostic_information();
+					shutdown();
+					scheduleReconnect();
+				}
+			});
+		} catch (...) {
+			BOOST_LOG_SEV(log, LogLevel::Error) << "Failed to connect.: " <<
+			boost::current_exception_diagnostic_information();
+			scheduleReconnect();
+		}
 	}
 	
 	void Node::sendHeader()
@@ -325,8 +355,9 @@ namespace mcore
 		std::lock_guard<std::recursive_mutex> lock(socketMutex);
 		
 		asio::async_write(socket, buffers, [this, buf1, buf2](const boost::system::error_code& err, std::size_t)
-	    {
+		{
 			std::lock_guard<std::recursive_mutex> lock(socketMutex);
+			
 			try {
 				if (err) {
 					MSCThrow(boost::system::system_error(err));
@@ -351,8 +382,10 @@ namespace mcore
 		auto buf = std::make_shared<std::uint32_t>();
 		
 		std::lock_guard<std::recursive_mutex> lock(socketMutex);
+		
 		asio::async_read(socket, asio::buffer(buf.get(), 4), [this, buf](const boost::system::error_code& err, std::size_t) {
 			std::lock_guard<std::recursive_mutex> lock(socketMutex);
+				
 			try {
 				if (err) {
 					MSCThrow(boost::system::system_error(err));
@@ -378,6 +411,7 @@ namespace mcore
 		buf->resize(size);
 		
 		std::lock_guard<std::recursive_mutex> lock(socketMutex);
+	
 		asio::async_read(socket, asio::buffer(*buf), [this, buf](const boost::system::error_code& err, std::size_t) {
 			std::lock_guard<std::recursive_mutex> lock(socketMutex);
 			try {
