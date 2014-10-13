@@ -230,15 +230,19 @@ $(function() {
                     nodes[this.id] = this;
                 });
 
-
+                $('#server-name').text(data.name);
+                $('#about-server').text(
+                    data.master.name + "\n" + data.master.version + " " +
+                    data.master.id + "\n" +
+                    data.master.copyright + "\n" +
+                    data.master.trademark);
+                $('#system-info').text(data.master.system);
 
                 domainTable.update(domains);
                 nodeTable.update(nodes);
                 versionTable.update(versions);
             },
-            error: function() {
-                alert("AJAX error.");
-            }
+            error: handleAjaxApiError
         });
     }
 
@@ -369,7 +373,7 @@ $(function() {
                     self.a.className = '';
                 },
                 error: function() {
-                    alert("AJAX error.");
+                    handleAjaxApiError(arguments);
                     self.loading = false;
                     self.a.className = '';
                 }
@@ -505,13 +509,19 @@ $(function() {
                 throw "Unknown error.";
             }
         } catch (e) {
-            alert("Error occured while performing AJAX operation.\n\n" + status);
+            $('#ajax-error-alert').show();
+            try { console.error(e); } catch (e) { }
+            //alert("Error occured while performing AJAX operation.\n\n" + status);
         }
     }
 
 	$('#refresh').click(function() {
 		refreshAll();
 	});
+
+    $('#ajax-error-alert button').click(function() {
+        $('#ajax-error-alert').hide();
+    }); 
 
 	refreshAll();
 

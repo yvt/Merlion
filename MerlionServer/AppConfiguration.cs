@@ -136,6 +136,16 @@ namespace Merlion.Server
 			}
 		}
 
+		public static string MasterName
+		{
+			get { 
+				var s = AppConfiguration.AppSettings["MasterName"]; 
+				if (string.IsNullOrWhiteSpace (s))
+					s = Environment.MachineName;
+				return s;
+			}
+		}
+
 		public static System.Net.IPEndPoint MasterServerAddress
 		{
 			get { 
@@ -228,7 +238,12 @@ namespace Merlion.Server
 
 		public static string NodeName
 		{
-			get { return AppConfiguration.AppSettings["NodeName"]; }
+			get { 
+				var s = AppConfiguration.AppSettings["NodeName"]; 
+				if (string.IsNullOrWhiteSpace (s))
+					s = Environment.MachineName;
+				return s;
+			}
 		}
 		public static bool ForwardLogToMaster
 		{

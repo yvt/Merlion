@@ -81,6 +81,7 @@
     <Compile Include="LogView.cs" />
     <Compile Include="LogStorages.cs" />
     <Compile Include="Utils\Deque.cs" />
+    <Compile Include="Web\ServerInformation.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <ItemGroup>
@@ -106,7 +107,6 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Web\WebPage.css" />
-    <EmbeddedResource Include="Web\Background.gif" />
     <EmbeddedResource Include="Web\Default.html" />
     <EmbeddedResource Include="Web\Console.js" />
     <EmbeddedResource Include="Web\jquery-2.1.1.min.js" />
@@ -117,5 +117,7 @@
     <EmbeddedResource Include="Web\fonts\glyphicons-halflings-regular.woff" />
     <EmbeddedResource Include="Web\js\bootstrap.min.js" />
     <EmbeddedResource Include="Log4Net.config" />
+    <EmbeddedResource Include="Web\Gradient1.jpg" />
+    <EmbeddedResource Include="Web\Gradient2.png" />
   </ItemGroup>
 </Project>

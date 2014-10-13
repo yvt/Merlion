@@ -50,10 +50,11 @@ namespace Merlion.Server.Web
 			//listener.Prefixes.Add (AppConfiguration.WebInterfacePrefix);
 			//listener.AuthenticationSchemeSelectorDelegate = auth.GetAuthenticationSchemes;
 
-			AddStaticContents ("/Background.gif");
 			AddStaticContents ("/WebPage.css");
 			AddStaticContents ("/Default.html");
 			AddStaticContents ("/Console.js");
+			AddStaticContents ("/Gradient1.jpg");
+			AddStaticContents ("/Gradient2.png");
 			AddStaticContents ("/jquery-2.1.1.min.js");
 			AddStaticContents ("/css/bootstrap.min.css");
 			AddStaticContents ("/js/bootstrap.min.js");
@@ -129,31 +130,8 @@ namespace Merlion.Server.Web
 				}
 			}
 		}
-		/*
-		void CheckHang(object blah)
-		{
-			try {
-				var req = System.Net.WebRequest.CreateHttp(AppConfiguration.WebInterfacePrefix
-					.Replace("+","localhost").Replace("*","localhost"));
-				req.Timeout = 5000;
 
-				var basic = auth as BasicWebInterfaceAuthentication;
-				if (basic != null) {
-					var cred = new System.Net.NetworkCredential();
-					cred.UserName = basic.UserName;
-					cred.Password = basic.Password;
-					req.Credentials = cred;
-				}
 
-				using (var r = req.GetResponse()) {
-					// okay!
-				}
-
-			} catch (Exception ex) {
-				listener.Stop ();
-				listener.Start ();
-			}
-		}*/
 
 		void Handle(HttpServerContext context)
 		{
@@ -330,7 +308,9 @@ namespace Merlion.Server.Web
 		{
 			var obj = new Dictionary<string, object> {
 				{ "versions", GetVersionInfo() },
-				{ "nodes", GetServerInfo() }
+				{ "nodes", GetServerInfo() },
+				{ "name", AppConfiguration.MasterName },
+				{ "master", ServerInformation.Information }
 			};
 			return obj;
 		}

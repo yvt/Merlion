@@ -4,21 +4,29 @@
         <meta charset="utf-8">
         <meta http-equiv="X-UA-Compatible" content="IE=edge">
         <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="viewport" content="width=800px">
         <title>Merlion Console</title>
         <link rel="stylesheet" href="https://code.jquery.com/ui/1.11.1/themes/smoothness/jquery-ui.css">
+        <link href='http://fonts.googleapis.com/css?family=Dosis:300,400' rel='stylesheet' type='text/css'>
         <link href="css/bootstrap.min.css" rel="stylesheet">
         <link href="WebPage.css" rel="stylesheet">
     </head>
     <body>
-        <div class="grad"></div>
-		<div class="container" role="main">
-            <p style="float: right;">
-                <button type="button" class="btn btn-primary btn-sm" id="refresh"><span class="glyphicon glyphicon-refresh"></span>&nbsp;Refresh</button>
-            </p>
-            <h1>Merlion Management Console</h1>
+        <header id="main-header">
+            <div id="gradient"></div>
+		    <div class="container" role="main">
+                <p style="float: right;">
+                    <button type="button" class="btn btn-primary btn-sm" id="refresh"><span class="glyphicon glyphicon-refresh"></span>&nbsp;Refresh</button>
+                </p>
+                <h1>&lsquo;<span id="server-name">(Unknown Server)</span>&rsquo; Control Panel</h1>
+            </div>
+        </header>
 
-
+        <div class="container" role="main">
+            <div class="alert alert-danger alert-dismissible" style="display: none;" id="ajax-error-alert" role="alert">
+              <button type="button" class="close"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+              <strong>Oh snap!</strong> Looks like something went wrong while doing an AJAX request.
+            </div>
 
             <!-- Nav tabs -->
             <ul class="nav nav-tabs" role="tablist">
@@ -26,6 +34,7 @@
                 <li><a href="#versions" role="tab" data-toggle="tab">Versions</a></li>
                 <li><a href="#servers" role="tab" data-toggle="tab">Nodes</a></li>
                 <li><a href="#logpane" role="tab" data-toggle="tab">Log</a></li>
+                <li><a href="#master" role="tab" data-toggle="tab">Master</a></li>
             </ul>
 
             <!-- Tab panes -->
@@ -127,9 +136,19 @@
                         </div>
                     </div>
                 </div>
+                <div class="tab-pane" id="master">
+                    <h3>About Server Software</h3>
+                    <p class="pre" id="about-server"></p>
+                    <h3>System Information</h3>
+                    <p id="system-info"></p>
+                    <h3>License</h3>
+                    <p>
+                        This software is licensed under <a href="http://www.apache.org/licenses/LICENSE-2.0.html">Apache License 2.0</a>.
+                    </p>
+                </div>
             </div>
 		</div>
-        <script type="text/javascript" src="jquery-2.1.1.min.js"></script>
+        <script src="https://code.jquery.com/jquery-2.1.1.min.js"></script>
         <script src="https://code.jquery.com/ui/1.11.1/jquery-ui.js"></script>
         <script type="text/javascript" src="js/bootstrap.min.js"></script>
        	<script type="text/javascript" src="Console.js"></script>
