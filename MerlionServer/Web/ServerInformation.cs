@@ -24,7 +24,6 @@ namespace Merlion.Server.Web
 			Information.Add ("name", asm.GetName().Name);
 			Information.Add ("version", asm.GetName().Version.ToString());
 			Information.Add ("copyright", GetAssemblyAttribute<AssemblyCopyrightAttribute>(asm).Copyright);
-			Information.Add ("id", GetAssemblyAttribute<AssemblyDescriptionAttribute>(asm).Description);
 			Information.Add ("trademark", GetAssemblyAttribute<AssemblyTrademarkAttribute>(asm).Trademark);
 
 			string osName = Environment.OSVersion.ToString ();

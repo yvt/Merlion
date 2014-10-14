@@ -160,9 +160,8 @@ namespace Merlion.Utils
 			Console.WriteLine ();
 			Console.WriteLine ("  {0}", asm.GetName().Name);
 			Console.WriteLine ("  ----------------------");
-			Console.WriteLine ("  {0} {1}",
-				asm.GetName().Version,
-				GetAssemblyAttribute<System.Reflection.AssemblyDescriptionAttribute>(asm).Description);
+			Console.WriteLine ("  {0}",
+				asm.GetName().Version);
 			Console.WriteLine ("  {0}",
 				GetAssemblyAttribute<System.Reflection.AssemblyCopyrightAttribute>(asm).Copyright);
 			Console.WriteLine ("  {0}",

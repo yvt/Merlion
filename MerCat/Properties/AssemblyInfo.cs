@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 // Change them to the values specific to your project.
 
 [assembly: AssemblyTitle ("MerCat")]
-[assembly: AssemblyDescription ("$Id$")]
+[assembly: AssemblyDescription ("")]
 #if DEBUG
 [assembly: AssemblyConfiguration("Debug")]
 #else

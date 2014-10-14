@@ -16,5 +16,4 @@
 
 #pragma once
 
-#define MSC_IDENT "$Id$"
-#define MSC_VERSION_STRING "Merlion 0.0.1 " MSC_IDENT
+#define MSC_VERSION_STRING "Merlion 0.0.1"

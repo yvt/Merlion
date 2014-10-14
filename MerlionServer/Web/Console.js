@@ -237,8 +237,7 @@ $(function() {
                 document.title = data.name + " - Merlion Web Console";
                 $('#server-name').text(data.name);
                 $('#about-server').text(
-                    data.master.name + "\n" + data.master.version + " " +
-                    data.master.id + "\n" +
+                    data.master.name + "\n" + data.master.version + "\n" +
                     data.master.copyright + "\n" +
                     data.master.trademark);
                 $('#system-info').text(data.master.system);
