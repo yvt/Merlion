@@ -156,6 +156,7 @@ $RECYCLE.BIN/
 .DS_Store
 
 # Xcode Generated Files
+*.xcodeproj/*
 DerivedData
 xcuserdata
 *~.nib
