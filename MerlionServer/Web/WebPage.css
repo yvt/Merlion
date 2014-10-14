@@ -90,23 +90,23 @@ header p { margin: 0; }
 
 .table-nonlined {
 	width: 100%;
+	border-collapse: separate;
 }
 
 /******* NODES **********/
 
-
 #server-table tr { 
-	background-color: white; 
+	background-color: transparent; 
 	-webkit-transition: background-color 0.1s, border-color 0.1s;
 	-moz-transition: background-color 0.1s, border-color 0.1s;
-	border-top: 1px solid white;
-	border-bottom: 1px solid white;
+	border-top: 1px solid rgba(246,246,246,0);
+	border-bottom: 1px solid rgba(246,246,246,0);
 }
 
 #server-table tr:hover {
 	background-color: #fdfdfd;   
-	border-top-color: #f6f6f6;   
-	border-bottom-color: #f6f6f6;
+	border-top-color: rgba(246,246,246,1);   
+	border-bottom-color: rgba(246,246,246,1);
 }
 
 #server-table h3 {
@@ -178,17 +178,17 @@ header p { margin: 0; }
 /******* VERSIONS **********/
 
 #version-table tr { 
-	background-color: white; 
+	background-color: transparent; 
 	-webkit-transition: background-color 0.1s, border-color 0.1s;
 	-moz-transition: background-color 0.1s, border-color 0.1s;
-	border-top: 1px solid white;
-	border-bottom: 1px solid white;
+	border-top: 1px solid rgba(246,246,246,0);
+	border-bottom: 1px solid rgba(246,246,246,0);
 }
 
 #version-table tr:hover {
 	background-color: #fdfdfd;   
-	border-top-color: #f6f6f6;   
-	border-bottom-color: #f6f6f6;
+	border-top-color: rgba(246,246,246,1);   
+	border-bottom-color: rgba(246,246,246,1);
 }
 
 #version-table td.cell-version-name {
