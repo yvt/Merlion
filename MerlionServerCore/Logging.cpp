@@ -65,6 +65,7 @@ namespace mcore
 		attrs.insert("Host", attrs::constant<std::string>(host));
 		attrs.insert("Source", attrs::constant<std::string>(source));
 		attrs.insert("Message", attrs::constant<std::string>(message));
+		attrs.insert("Severity", attrs::constant<LogLevel>(level));
 		auto rec = core->open_record(attrs);
 		if (rec) {
 			core->push_record(std::move(rec));
