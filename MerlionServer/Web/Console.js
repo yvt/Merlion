@@ -19,6 +19,12 @@ $(function() {
 	function bindList(parent, options)
 	{
 		var rows = {};
+        var inserter = options.inserter;
+        if (!inserter) {
+            inserter = function(e) {
+                e.appendTo(parent);
+            };
+        }
 
 		return {
 			update: function (data) {
@@ -30,7 +36,10 @@ $(function() {
                             key: key,
                             alive: true
                         };
-                        rows[key].element = options.create(rows[key], data[key]).appendTo(parent)
+
+                        rows[key].element = options.create(rows[key], data[key]);
+
+                        inserter(rows[key].element);
                     } else {
                         rows[key].alive = true;
                         options.update(rows[key], data[key]);
@@ -50,36 +59,15 @@ $(function() {
 		};
 	}	
 
-    var domainTable = bindList($('#domain-table'), {
-        create: function (row, data) {
-            var tr = row.tr = $('<tr>');
-            row.dNode = $('<td>').appendTo(tr);
-            row.dVer = $('<td>').appendTo(tr);
-            row.dNumRooms = $('<td>').appendTo(tr);
-            row.dNumClients = $('<td>').appendTo(tr);
-            row.dUpTime = $('<td>').appendTo(tr);
-            row.dActions = $('<td>').appendTo(tr);
-            row.dUpTime.text('--');
-            row.dActions.text('--');
-            return this.update(row, data);
-        },
-        update: function (row, data) {
-            row.dNode.text(data.node);
-            row.dVer.text(data.version);
-            row.dNumRooms.text(data.numRooms);
-            row.dNumClients.text(data.numClients);
-            return row.tr;
-        }
-    });
 
     var versionTable = bindList($('#version-table'), {
         create: function (row, data) {
             var tr = row.tr = $('<tr>');
-            row.dVer = $('<td>').appendTo(tr);
-            row.dNumRooms = $('<td>').appendTo(tr);
-            row.dNumClients = $('<td>').appendTo(tr);
-            row.dThrottle = $('<td>').appendTo(tr);
-            row.dActions = $('<td>').appendTo(tr);
+            row.dVer = $('<td class="cell-version-name">').appendTo(tr);
+            row.dNumRooms = $('<td class="cell-num-rooms">').appendTo(tr);
+            row.dNumClients = $('<td class="cell-num-clients">').appendTo(tr);
+            row.dThrottle = $('<td class="cell-throttle">').appendTo(tr);
+            row.dActions = $('<td class="cell-actions">').appendTo(tr);
 
             row.dThrottleSlider = $('<div>').appendTo(row.dThrottle)
             .slider({
@@ -123,8 +111,8 @@ $(function() {
         },
         update: function (row, data) {
             row.dVer.text(data.name);
-            row.dNumRooms.text(data.numRooms);
-            row.dNumClients.text(data.numClients);
+            row.dNumRooms.text(formatCount(data.numRooms) + (data.numRooms == 1 ? " room" : " rooms"));
+            row.dNumClients.text(formatCount(data.numClients) + (data.numClients == 1 ? " client" : " clients"));
             row.lastValue = data.throttle;
             row.dThrottleSlider.slider('value', data.throttle);
             return row.tr;
@@ -133,16 +121,12 @@ $(function() {
 
     var nodeTable = bindList($('#server-table'), {
         create: function (row, data) {
-            var tr = row.tr = $('<tr>');
-            row.dNode = $('<td>').appendTo(tr);
-            row.dHost = $('<td>').appendTo(tr);
-            row.dNumRooms = $('<td>').appendTo(tr);
-            row.dNumClients = $('<td>').appendTo(tr);
-            row.dUpTime = $('<td>').appendTo(tr);
-            row.dThrottle = $('<td>').appendTo(tr);
-            row.dActions = $('<td>').appendTo(tr);
+            var tr = row.tr = $('<tr class="node">');
+            row.dBody = $('<td>').appendTo(tr);
+            row.dNumRooms = $('<td class="cell-num-rooms">').appendTo(tr);
+            row.dNumClients = $('<td class="cell-num-clients">').appendTo(tr);
 
-            row.dThrottleSlider = $('<div>').appendTo(row.dThrottle)
+            row.dThrottleSlider = $('<div class="throttle">').appendTo(row.dBody)
             .slider({
                 value: 0, min: 0, max: 1, step: 0.05,
                 range: 'min', change: function(e, ui) {
@@ -164,32 +148,51 @@ $(function() {
                     });
                 }
             });
-            $('<button class="btn btn-danger btn-sm">')
-            .text('Remove').appendTo(row.dActions)
-            .click(function() {
-                $.ajax({
-                    url: '/node/destroy.json',
-                    type: 'POST',
-                    data: {
-                        version: data.name
-                    },
-                    success: function() {
-                        refreshAll()
-                    },
-                    error: handleAjaxApiError
-                });
+
+            row.dHeader = $('<h3>').appendTo(row.dBody);
+            row.dNodeName = $('<span>').appendTo(row.dHeader);
+            row.dHost = $('<small>').appendTo(row.dHeader);
+
+            var p1 = $('<p>').appendTo(row.dBody);
+            row.dUpTime = $('<span>').appendTo(p1);
+
+            // var p2 = $('<p>').appendTo(row.dBody);
+
+            row.domainTable = bindList(this, {
+                create: function (row, data) {
+                    var tr = row.tr = $('<tr class="domain">');
+                    row.dVer = $('<td class="cell-domain-name">').appendTo(tr);
+                    row.dNumRooms = $('<td class="cell-num-rooms">').appendTo(tr);
+                    row.dNumClients = $('<td class="cell-num-clients">').appendTo(tr);
+                    return this.update(row, data);
+                },
+                update: function (row, data) {
+                    row.dVer.text(data.version);
+                    row.dNumRooms.text(formatCount(data.numRooms) + (data.numRooms == 1 ? " room" : " rooms"));
+                    row.dNumClients.text(formatCount(data.numClients) + (data.numClients == 1 ? " client" : " clients"));
+                    return row.tr;
+                },
+                inserter: function (e) {
+                    row.tr.after(e);
+                }
             });
 
-            return this.update(row, data);
+            var self = this;
+            setTimeout(function() {
+                self.update(row, data);
+            }, 0);
+
+            return row.tr;
         },
         update: function (row, data) {
-            row.dNode.text(data.name);
+            row.dNodeName.text(data.name);
             row.dHost.text(data.host);
-            row.dNumRooms.text(data.numRooms);
-            row.dNumClients.text(data.numClients);
+            row.dNumRooms.text(formatCount(data.numRooms) + (data.numRooms == 1 ? " room" : " rooms"));
+            row.dNumClients.text(formatCount(data.numClients) + (data.numClients == 1 ? " client" : " clients"));
             row.dUpTime.text(formatUpTime(data.uptime));
             row.lastValue = data.throttle;
             row.dThrottleSlider.slider('value', data.throttle);
+            row.domainTable.update(data.domains);
             return row.tr;
         }
     });
@@ -218,13 +221,7 @@ $(function() {
                             ver.numRooms += dom.numRooms;
                             ver.numClients += dom.numClients;
                         }
-
-                        domains[this.name + '/' + verName] = {
-                            node: this.name,
-                            version: verName,
-                            numRooms: dom.numRooms,
-                            numClients: dom.numClients
-                        };
+                        dom.version = verName;
                     }
 
                     nodes[this.id] = this;
@@ -239,12 +236,28 @@ $(function() {
                     data.master.trademark);
                 $('#system-info').text(data.master.system);
 
-                domainTable.update(domains);
                 nodeTable.update(nodes);
                 versionTable.update(versions);
             },
             error: handleAjaxApiError
         });
+    }
+
+    function formatCount(count)
+    {
+        var s = String(count);
+        var parts = [];
+        var ln = s.length;
+        for (var i = 0; i < ln; i += 3) {
+            var end = s.length - i;
+            var begin = Math.max(end - 3, 0);
+            parts.push(s.substr(begin, end - begin));
+        }
+        for (var a = 0, b = parts.length - 1; a < b; ++a, --b) {
+            var p = parts[a]; parts[a] = parts[b];
+            parts[b] = p;
+        }
+        return parts.join(',');
     }
 
     function formatUpTime(uptime)

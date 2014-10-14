@@ -30,45 +30,16 @@
 
             <!-- Nav tabs -->
             <ul class="nav nav-tabs" role="tablist" id="main-tabs">
-                <li class="active"><a href="#domains" role="tab" data-toggle="tab">App Domains</a></li>
                 <li><a href="#versions" role="tab" data-toggle="tab">Versions</a></li>
-                <li><a href="#servers" role="tab" data-toggle="tab">Nodes</a></li>
+                <li class="active"><a href="#servers" role="tab" data-toggle="tab">Nodes</a></li>
                 <li><a href="#logpane" role="tab" data-toggle="tab">Log</a></li>
                 <li><a href="#master" role="tab" data-toggle="tab">Master</a></li>
             </ul>
 
             <!-- Tab panes -->
             <div class="tab-content">
-                <div class="tab-pane active" id="domains">
-                    <table class="table table-striped table-hover table-condensed table-middle">
-                        <thead>
-                            <tr>
-                                <th>Node</th>
-                                <th>Version</th>
-                                <th># of Rooms</th>
-                                <th># of Clients</th>
-                                <th>Up Time</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="domain-table">
-                        </tbody>
-                    </table>
-                    <!--<p>
-                    <div id="slider"></div>
-                    </p>-->
-                </div>
                 <div class="tab-pane" id="versions">
-                    <table class="table table-striped table-hover table-condensed table-middle">
-                        <thead>
-                            <tr>
-                                <th>Version</th>
-                                <th># of Rooms</th>
-                                <th># of Clients</th>
-                                <th>Throttle</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
+                    <table class="table-nonlined" style="margin-top: 2px;">
                         <tbody id="version-table">
                         </tbody>
                     </table>
@@ -93,19 +64,13 @@
                         </div>
                     </form>
                 </div>
-                <div class="tab-pane" id="servers">
-                    <table class="table table-striped table-hover table-condensed table-middle">
-                        <thead>
-                            <tr>
-                                <th>Node</th>
-                                <th>Host</th>
-                                <th># of Rooms</th>
-                                <th># of Clients</th>
-                                <th>Up Time</th>
-                                <th>Throttle</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
+                <div class="tab-pane active" id="servers">
+                    <table class="table-nonlined" style="margin-top: 2px;">
+                        <colgroup id="server-table-columns">
+                            <col class="column-body" />
+                            <col class="column-num-rooms" />
+                            <col class="column-num-clients" />
+                        </colgroup>
                         <tbody id="server-table">
                         </tbody>
                     </table>
