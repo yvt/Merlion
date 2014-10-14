@@ -147,11 +147,13 @@ namespace mcore
 	reconnectTimer(library->ioService()),
 	endpoint(parseTcpEndpoint(parameters.masterEndpoint)),
 	down(true),
-	beingDisposed(false)
+	beingDisposed(false),
+	startTime(boost::posix_time::second_clock::universal_time())
 	{
 		BOOST_LOG_SEV(log, LogLevel::Info) << "Starting as '" << parameters.nodeName << "'.";
 		
 		info.nodeName = parameters.nodeName;
+		info.serverSoftwareName = MSC_VERSION_STRING;
 		versionLoader = std::make_shared<NodeVersionLoader>(endpoint);
 		
 		versionLoader->onVersionAboutToBeDownloaded.connect([=](const std::string &version, bool &cancel) {
@@ -347,7 +349,16 @@ namespace mcore
 	{
 		PacketGenerator header1, header2;
 		header1.write(ControlStreamHeaderMagic);
+		
+		// Write NodeInfo
 		info.serialize(header2);
+		
+		// Write uptime
+		auto uptime = boost::posix_time::second_clock::universal_time() - startTime;
+		auto uptimeSecs = uptime.total_seconds();
+		header2.write(static_cast<std::uint64_t>(uptimeSecs));
+		
+		// Write size of the header
 		header1.write(static_cast<std::uint32_t>(header2.size()));
 		
 		auto buf1 = std::make_shared<std::vector<char>>(std::move(header1.vector()));

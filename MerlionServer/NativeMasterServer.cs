@@ -126,16 +126,18 @@ namespace Merlion.Server
 				var info = new NodeStatus() {
 					ID = node.NodeName.GetHashCode(),
 					Name = node.NodeName,
-					HostName = "unknown",
-					UpTime = TimeSpan.Zero,
+					HostName = node.HostName,
+					UpTime = node.UpTime,
 					Domains = new Dictionary<string, DomainStatus>(),
-					Throttle = balancer.GetNode(node.NodeName).Throttle
+					Throttle = balancer.GetNode(node.NodeName).Throttle,
+					ServerSoftware = node.ServerSoftware
 				};
 
 				foreach (var domain in node.Domains) {
 					info.Domains.Add(domain.VersionName, new DomainStatus() {
 						NumRooms = domain.RoomCount,
-						NumClients = domain.ClientCount
+						NumClients = domain.ClientCount,
+						UpTime = domain.UpTime
 					});
 					info.NumRooms += domain.RoomCount;
 					info.NumClients += domain.ClientCount;

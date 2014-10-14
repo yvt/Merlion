@@ -142,9 +142,37 @@ namespace Merlion.Server
 			double throttle);
 
 		delegate void MSCMasterEnumerateNodesNodeCallback
-		(string nodeName, IntPtr userdata);
+		(ref MSCNodeStatus nodeStatus, IntPtr userdata);
 		delegate void MSCMasterEnumerateNodesDomainCallback
-		(string nodeName, string versionName, int numClients, int numRooms, IntPtr userdata);
+		(ref MSCDomainStatus domainStatus, IntPtr userdata);
+
+		struct MSCNodeStatus
+		{
+			[MarshalAs(UnmanagedType.LPStr)]
+			public string nodeName;
+
+			[MarshalAs(UnmanagedType.LPStr)]
+			public string serverSoftwareVersion;
+
+			public long uptime;
+
+			[MarshalAs(UnmanagedType.LPStr)]
+			public string hostName;
+		}
+
+		struct MSCDomainStatus
+		{
+			[MarshalAs(UnmanagedType.LPStr)]
+			public string nodeName;
+
+			[MarshalAs(UnmanagedType.LPStr)]
+			public string versionName;
+
+			public int numClients;
+			public int numRooms;
+
+			public long uptime;
+		}
 
 		[DllImport("MerlionServerCore")]
 		static extern MSCResult MSCMasterEnumerateNodes( 
@@ -517,11 +545,15 @@ namespace Merlion.Server
 				public string VersionName;
 				public int ClientCount;
 				public int RoomCount;
+				public TimeSpan UpTime;
 			}
 
 			public sealed class NodeInfo
 			{
 				public string NodeName;
+				public string ServerSoftware;
+				public string HostName;
+				public TimeSpan UpTime;
 				public DomainInfo[] Domains;
 			}
 
@@ -548,21 +580,25 @@ namespace Merlion.Server
 				domains.Clear ();
 			}
 
-			void HandleMSCMasterEnumerateNodesDomainCallback (string nodeName, string versionName, int numClients, int numRooms, IntPtr userdata)
+			void HandleMSCMasterEnumerateNodesDomainCallback (ref MSCDomainStatus status, IntPtr userdata)
 			{
 				domains.Add (new DomainInfo () {
-					VersionName = versionName,
-					ClientCount = numClients,
-					RoomCount = numRooms
+					VersionName = status.versionName,
+					ClientCount = status.numClients,
+					RoomCount = status.numRooms,
+					UpTime = TimeSpan.FromSeconds((double)status.uptime)
 				});
 			}
 
-			void HandleMSCMasterEnumerateNodesNodeCallback (string nodeName, IntPtr userdata)
+			void HandleMSCMasterEnumerateNodesNodeCallback (ref MSCNodeStatus status, IntPtr userdata)
 			{
 				FillDomains ();
 
 				nodes.Add (new NodeInfo () {
-					NodeName = nodeName
+					NodeName = status.nodeName,
+					ServerSoftware = status.serverSoftwareVersion,
+					HostName = status.hostName,
+					UpTime = TimeSpan.FromSeconds((double)status.uptime)
 				});
 			}
 

@@ -21,6 +21,7 @@
 #include <boost/format.hpp>
 #include "Packet.hpp"
 #include "MasterClient.hpp"
+#include <sstream>
 
 namespace asio = boost::asio;
 using boost::format;
@@ -36,6 +37,12 @@ namespace mcore
 		channel = str(format("Unknown Node [%s]") % connection->tcpSocket().remote_endpoint());
 		log.setChannel(channel);
 		connection->setChannelName(channel);
+		
+		{
+			std::stringstream ss;
+			ss << connection->tcpSocket().remote_endpoint();
+			_hostNameString = ss.str();
+		}
 		
 		// Placeholder for packet size
 		sendBuffer.write<std::uint32_t>(0);
@@ -96,6 +103,10 @@ namespace mcore
 
                 PacketReader reader(headerBuffer->data(), readCount);
                 _nodeInfo.deserialize(reader);
+				
+				auto nodeUptime = reader.read<std::uint64_t>();
+				startTime = boost::posix_time::second_clock::universal_time()
+				- boost::posix_time::seconds(static_cast<long>(nodeUptime));
 				
 				channel = str(format("Node:%s [%s]") % _nodeInfo.nodeName % connection->tcpSocket().remote_endpoint());
 				log.setChannel(channel);
@@ -193,6 +204,7 @@ namespace mcore
 							std::lock_guard<std::recursive_mutex> lock(domainsMutex);
 							Domain& domain = domains[version];
 							domain.versionName = version;
+							domain.startTime = boost::posix_time::second_clock::universal_time();
 							break;
 						}
 
@@ -421,6 +433,13 @@ namespace mcore
 		return count;
 	}
 	
+	std::uint64_t MasterNode::uptime()
+	{
+		return static_cast<std::uint64_t>
+		((boost::posix_time::second_clock::universal_time() -
+		  startTime).total_seconds());;
+	}
+	
 	boost::optional<std::string> MasterNode::findDomainForRoom(const std::string& room)
 	{
 		if (room.empty())
@@ -445,6 +464,9 @@ namespace mcore
 		for (const auto& item: domains) {
 			DomainStatus status;
 			status.versionName = item.second.versionName;
+			status.uptime = static_cast<std::uint64_t>
+			((boost::posix_time::second_clock::universal_time() -
+			  item.second.startTime).total_seconds());
 			status.numClients = item.second.clients.size();
 			status.numRooms = item.second.rooms.size();
 			ret.push_back(status);

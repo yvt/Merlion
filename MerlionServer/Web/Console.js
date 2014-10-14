@@ -154,6 +154,7 @@ $(function() {
             row.dHost = $('<small>').appendTo(row.dHeader);
 
             var p1 = $('<p>').appendTo(row.dBody);
+            row.dServer = $('<span>').appendTo(p1);
             row.dUpTime = $('<span>').appendTo(p1);
 
             // var p2 = $('<p>').appendTo(row.dBody);
@@ -161,13 +162,18 @@ $(function() {
             row.domainTable = bindList(this, {
                 create: function (row, data) {
                     var tr = row.tr = $('<tr class="domain">');
-                    row.dVer = $('<td class="cell-domain-name">').appendTo(tr);
+                    row.dBody = $('<td class="cell-domain-name">').appendTo(tr);
                     row.dNumRooms = $('<td class="cell-num-rooms">').appendTo(tr);
                     row.dNumClients = $('<td class="cell-num-clients">').appendTo(tr);
+
+                    row.dHeader = $('<h4>').appendTo(row.dBody);
+                    row.dVer = $('<span>').appendTo(row.dHeader);
+                    row.dUpTime = $('<small>').appendTo(row.dHeader);
                     return this.update(row, data);
                 },
                 update: function (row, data) {
                     row.dVer.text(data.version);
+                    row.dUpTime.text(formatUpTime(data.uptime));
                     row.dNumRooms.text(formatCount(data.numRooms) + (data.numRooms == 1 ? " room" : " rooms"));
                     row.dNumClients.text(formatCount(data.numClients) + (data.numClients == 1 ? " client" : " clients"));
                     return row.tr;
@@ -189,7 +195,8 @@ $(function() {
             row.dHost.text(data.host);
             row.dNumRooms.text(formatCount(data.numRooms) + (data.numRooms == 1 ? " room" : " rooms"));
             row.dNumClients.text(formatCount(data.numClients) + (data.numClients == 1 ? " client" : " clients"));
-            row.dUpTime.text(formatUpTime(data.uptime));
+            row.dServer.text(data.server + ", ");
+            row.dUpTime.text(formatUpTime(data.uptime) + " since node startup.");
             row.lastValue = data.throttle;
             row.dThrottleSlider.slider('value', data.throttle);
             row.domainTable.update(data.domains);

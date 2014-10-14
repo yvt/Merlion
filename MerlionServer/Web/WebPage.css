@@ -5,9 +5,13 @@
 	height: 100%;
 }
 
-html, body{
+html, body {
 	background: none;
 	font-size: 12px;
+}
+
+/* DEFAULT FONT */
+html, body, h3 small, h4 small {
 	font-family: 'Trebuchet MS', 'Helvetica Neue', 'Helvetica', sans-serif;
 }
 
@@ -55,7 +59,7 @@ h1 > #server-name {
 	color: #555;
 }
 
-h3 {
+h3, h4 {
 	font-weight: 400;
 	font-family: 'Dosis', sans-serif;
 	color: #555;
@@ -120,6 +124,10 @@ header p { margin: 0; }
 	margin: 0 6px;
 }
 
+#server-table p > span {
+	color: #777;
+}
+
 #server-table div.throttle {
 	float: right;
 	width: 100px;
@@ -138,6 +146,21 @@ header p { margin: 0; }
 
 #server-table td.cell-domain-name {
 	padding-left: 20px;
+}
+
+#server-table tr.domain h4 {
+	font-weight: 300;
+	font-family: 'Dosis', sans-serif;
+	color: #444;
+	font-size: 18px;
+	line-height: 1.6;
+	margin: 0;
+}
+#server-table tr.domain h4 small {
+	font-size: 12px;
+	font-weight: 400;
+	color: #888;
+	margin: 0 6px;
 }
 
 #server-table td.cell-domain-name,

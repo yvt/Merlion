@@ -47,17 +47,20 @@ namespace mcore
     struct NodeInfo
     {
         std::string nodeName;
+		std::string serverSoftwareName;
 
         template <class Writer>
         void serialize(Writer& writer)
         {
             writer.writeString(nodeName);
+			writer.writeString(serverSoftwareName);
         }
 
         template <class Reader>
         void deserialize(Reader& reader)
         {
             nodeName = reader.readString();
+			serverSoftwareName = reader.readString();
         }
     };
     

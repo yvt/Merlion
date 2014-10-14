@@ -38,6 +38,8 @@ namespace mcore
 		std::shared_ptr<MasterNodeConnection> connection;
         NodeInfo _nodeInfo;
 		std::string channel;
+		std::string _hostNameString;
+		boost::posix_time::ptime startTime;
 
         PacketGenerator sendBuffer;
         std::recursive_mutex sendMutex;
@@ -48,6 +50,7 @@ namespace mcore
             std::string versionName;
 			std::unordered_map<std::uint64_t, std::shared_ptr<MasterClient>> clients;
             std::unordered_set<std::string> rooms;
+			boost::posix_time::ptime startTime;
         };
         std::unordered_map<std::string, Domain> domains;
         std::recursive_mutex domainsMutex;
@@ -81,6 +84,10 @@ namespace mcore
 		std::size_t numClients();
 		std::size_t numRooms();
 		
+		std::uint64_t uptime();
+		
+		const std::string& hostNameString() const { return _hostNameString; }
+		
 		boost::optional<std::string> findDomainForRoom(const std::string&);
 		
 		struct DomainStatus
@@ -88,6 +95,7 @@ namespace mcore
 			std::string versionName;
 			std::size_t numClients;
 			std::size_t numRooms;
+			std::uint64_t uptime;
 		};
 		std::vector<DomainStatus> domainStatuses();
 		

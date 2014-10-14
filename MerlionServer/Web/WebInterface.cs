@@ -404,7 +404,8 @@ namespace Merlion.Server.Web
 			foreach (var ver in info.Domains) {
 				vers.Add (ver.Key, new Dictionary<string, object> {
 					{ "numRooms", ver.Value.NumRooms },
-					{ "numClients", ver.Value.NumClients }
+					{ "numClients", ver.Value.NumClients },
+					{ "uptime", ver.Value.UpTime.TotalSeconds }
 				});
 			}
 			return new Dictionary<string, object> {
@@ -415,7 +416,8 @@ namespace Merlion.Server.Web
 				{ "numClients", info.NumClients },
 				{ "domains", vers },
 				{ "uptime", info.UpTime.TotalSeconds },
-				{ "throttle", info.Throttle }
+				{ "throttle", info.Throttle },
+				{ "server", info.ServerSoftware }
 			};
 		}
 			

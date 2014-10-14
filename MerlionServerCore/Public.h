@@ -93,12 +93,28 @@ extern "C" {
 		
 		MSCMasterFlags flags;
 	};
+		
+	struct MSCNodeStatus
+	{
+		const char *nodeName;
+		const char *serverSoftwareName;
+		std::uint64_t uptime;
+		const char *hostName;
+	};
+		
+	struct MSCDomainStatus
+	{
+		const char *nodeName;
+		const char *versionName;
+		std::uint32_t numClients;
+		std::uint32_t numRooms;
+		std::uint64_t uptime;
+	};
 	
 	typedef void (*MSCMasterEnumerateNodesNodeCallback)
-	(const char *nodeName, void *userdata);
+	(const MSCNodeStatus *info, void *userdata);
 	typedef void (*MSCMasterEnumerateNodesDomainCallback)
-	(const char *nodeName, const char *versionName,
-	 std::uint32_t numClients, std::uint32_t numRooms, void *userdata);
+	(const MSCDomainStatus *info, void *userdata);
 	
 	extern MSCResult MSCMasterCreate(MSCLibrary library,
 			MSCMasterParameters *params, MSCMaster *master);

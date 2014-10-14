@@ -627,14 +627,25 @@ extern "C" MSCResult MSCMasterEnumerateNodes(MSCMaster master,
 		auto *m = mcore::Master::fromHandle(master);
 		for (const auto& node: m->getAllNodes()) {
 			if (nodeCallback != nullptr) {
-				nodeCallback(node->nodeInfo().nodeName.c_str(), userdata);
+				const auto& info = node->nodeInfo();
+				MSCNodeStatus s;
+				s.nodeName = info.nodeName.c_str();
+				s.serverSoftwareName = info.serverSoftwareName.c_str();
+				s.uptime = node->uptime();
+				
+				auto hn = node->hostNameString();
+				s.hostName = hn.c_str();
+				nodeCallback(&s, userdata);
 			}
 			if (domainCallback != nullptr) {
 				for (const auto& info: node->domainStatuses()) {
-					domainCallback(node->nodeInfo().nodeName.c_str(),
-								   info.versionName.c_str(),
-								   static_cast<std::uint32_t>(info.numClients),
-								   static_cast<std::uint32_t>(info.numRooms),
+					MSCDomainStatus s;
+					s.nodeName = node->nodeInfo().nodeName.c_str();
+					s.versionName = info.versionName.c_str();
+					s.numRooms = static_cast<std::uint32_t>(info.numRooms);
+					s.numClients = static_cast<std::uint32_t>(info.numClients);
+					s.uptime = info.uptime;
+					domainCallback(&s,
 								   userdata);
 				}
 			}

@@ -38,6 +38,7 @@ namespace Merlion.Server
 		public long NumRooms;
 		public Dictionary<string, DomainStatus> Domains;
 		public double Throttle;
+		public string ServerSoftware;
 	}
 
 	public sealed class DomainStatus
@@ -45,6 +46,7 @@ namespace Merlion.Server
 		public string Version;
 		public long NumClients;
 		public long NumRooms;
+		public TimeSpan UpTime;
 	}
 
 }

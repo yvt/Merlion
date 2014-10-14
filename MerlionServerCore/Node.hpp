@@ -56,6 +56,7 @@ namespace mcore
 		
 		NodeParameters const _parameters;
 		NodeInfo info;
+		boost::posix_time::ptime startTime;
 		
 		boost::asio::ip::tcp::endpoint endpoint;
 		boost::asio::ip::tcp::socket socket;

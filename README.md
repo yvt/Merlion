@@ -77,7 +77,8 @@ Master             |  |  Merlion Master Server  |  |
 Screenshots
 -----------
 
-![Web Console](https://dl.dropboxusercontent.com/u/37804131/github/Screen%20Shot%202014-10-13%20at%209.44.57%20PM.png)
+![Web Console](https://dl.dropboxusercontent.com/u/37804131/github/Screen%20Shot%202014-10-14%20at%205.35.02%20PM.png)
+![Web Console](https://dl.dropboxusercontent.com/u/37804131/github/Screen%20Shot%202014-10-14%20at%205.35.25%20PM.png)
 
 
 Test Server
