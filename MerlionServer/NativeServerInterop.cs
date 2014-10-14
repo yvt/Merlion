@@ -703,7 +703,7 @@ namespace Merlion.Server
 			uint HandleMSCUnloadVersionCallback (string versionName, IntPtr userdata)
 			{
 				try {
-					param.VersionLoader(versionName);
+					param.VersionUnloader(versionName);
 					return 0;
 				} catch {
 					return 1;

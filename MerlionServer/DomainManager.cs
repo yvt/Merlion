@@ -123,6 +123,7 @@ namespace Merlion.Server
 					domains.Remove (version);
 				}
 
+				loadedVersions.Remove (version);
 			}
 		}
 
