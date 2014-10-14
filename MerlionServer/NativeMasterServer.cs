@@ -129,12 +129,9 @@ namespace Merlion.Server
 					HostName = node.HostName,
 					UpTime = node.UpTime,
 					Domains = new Dictionary<string, DomainStatus>(),
+					Throttle = balancer.GetNode(node.NodeName, true).Throttle,
 					ServerSoftware = node.ServerSoftware
 				};
-
-				var nodeThrottle = balancer.GetNode(node.NodeName);
-				if (nodeThrottle != null)
-					info.Throttle = nodeThrottle.Throttle;
 
 				foreach (var domain in node.Domains) {
 					info.Domains.Add(domain.VersionName, new DomainStatus() {
