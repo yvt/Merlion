@@ -334,6 +334,7 @@ namespace mcore
 				} catch (...) {
 					BOOST_LOG_SEV(log, LogLevel::Error) << "Failed to connect.: " <<
 					boost::current_exception_diagnostic_information();
+					try { socket.close(); } catch (...) { }
 					shutdown();
 					scheduleReconnect();
 				}
@@ -341,6 +342,7 @@ namespace mcore
 		} catch (...) {
 			BOOST_LOG_SEV(log, LogLevel::Error) << "Failed to connect.: " <<
 			boost::current_exception_diagnostic_information();
+			try { socket.close(); } catch (...) { }
 			scheduleReconnect();
 		}
 	}
