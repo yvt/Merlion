@@ -334,7 +334,7 @@ namespace mcore
 		
         sendReady = false;
         connection->writeAsync(asio::buffer(sentData->data(), sentData->size()),
-        [this] (const boost::system::error_code& error, std::size_t readCount) {
+        [this, sentData] (const boost::system::error_code& error, std::size_t readCount) {
             try {
                 if (error) {
                     MSCThrow(boost::system::system_error(error));
