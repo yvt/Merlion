@@ -283,7 +283,7 @@ $(function() {
         } else if (uptime < 86400) {
             var m = Math.floor(uptime / 60) % 60;
             var h = Math.floor(uptime / 3600);
-            return m + "h" + m + "m";
+            return h + "h" + m + "m";
         } else {
             var h = Math.floor(uptime / 3600) % 24;
             var d = Math.floor(uptime / 86400);
