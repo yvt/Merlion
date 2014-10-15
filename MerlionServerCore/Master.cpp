@@ -262,8 +262,19 @@ namespace mcore
 																   _parameters.allowVersionSpecification);
                 }
 				
+				std::weak_ptr<MasterClient> weakConn(conn);
+				
 				// Setup "someone needs to respond to me" handler
-				conn->onNeedsResponse.connect([this, conn](const std::shared_ptr<MasterClientResponse>& r) {
+				conn->onNeedsResponse.connect([this, weakConn](const std::shared_ptr<MasterClientResponse>& r) {
+					
+					auto conn = weakConn.lock();
+					if (!conn) {
+						// Unexpected...
+						BOOST_LOG_SEV(log, LogLevel::Error) <<
+						"onNeedsResponse raised by unexistent MasterClient.";
+						return;
+					}
+					
 					// Use balancer to choose a server.
 					auto domain = bindClientToDomain(conn);
 					 
@@ -306,7 +317,16 @@ namespace mcore
 				});
 				
 				// Register client shutdown handler.
-				conn->onShutdown.connect([this, conn]() {
+				conn->onShutdown.connect([this, weakConn]() {
+					
+					auto conn = weakConn.lock();
+					if (!conn) {
+						// Unexpected...
+						BOOST_LOG_SEV(log, LogLevel::Error) <<
+						"onShutdown raised by unexistent MasterClient.";
+						return;
+					}
+					
 					removeClient(conn->id());
 				});
 				
