@@ -40,5 +40,4 @@
 #include <boost/filesystem.hpp>
 #include <boost/signals2.hpp>
 #include <boost/filesystem/fstream.hpp>
-#include <boost/xpressive/xpressive.hpp>
-#include <boost/xpressive/xpressive_static.hpp>
+#include <regex>

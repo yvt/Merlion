@@ -19,8 +19,6 @@
 #include "Exceptions.hpp"
 #include <cctype>
 
-using namespace boost::xpressive;
-
 namespace mcore
 {
 	namespace
@@ -101,12 +99,13 @@ namespace mcore
 			}
 		}
 		
-		regex = sregex::compile(str.data(), str.size(), regex_constants::ECMAScript);
+		regex.reset(new std::regex(str.data(), str.size(),
+								   std::regex_constants::ECMAScript));
 		
 	}
 	
 	bool LikeMatcher::match(const std::string &subject)
 	{
-		return regex_match(subject, regex);
+		return std::regex_match(subject, *regex);
 	}
 }

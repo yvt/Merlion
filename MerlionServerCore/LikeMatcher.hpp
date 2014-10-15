@@ -20,7 +20,7 @@ namespace mcore
 {
 	class LikeMatcher
 	{
-		boost::xpressive::sregex regex;
+		std::unique_ptr<std::regex> regex;
 	public:
 		LikeMatcher(const std::string &pattern);
 		
