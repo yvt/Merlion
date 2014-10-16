@@ -22,6 +22,12 @@ using System.Linq;
 
 namespace Merlion.Server
 {
+	sealed class RoomAndVersionEventArgs: EventArgs
+	{
+		public byte[] RoomId;
+		public string Version;
+	}
+
 	sealed class DomainManager
 	{
 		readonly static ILog log = LogManager.GetLogger(typeof(DomainManager));
@@ -37,6 +43,9 @@ namespace Merlion.Server
 			new HashSet<string>();
 
 		readonly object sync = new object();
+
+		public event EventHandler<RoomAndVersionEventArgs> RoomBeingAdded;
+		public event EventHandler<RoomAndVersionEventArgs> RoomRemoved;
 
 		public DomainManager (INodeServer node)
 		{
@@ -75,6 +84,22 @@ namespace Merlion.Server
 				new Task (() => {
 					try {
 						var dom = new Domain(NodeServer, version);
+						dom.RoomBeingAdded += (sender, e) => {
+							var h = RoomBeingAdded;
+							if (h != null)
+								h(this, new RoomAndVersionEventArgs() {
+									RoomId = e.RoomId,
+									Version = version
+								});
+						};
+						dom.RoomRemoved += (sender, e) => {
+							var h = RoomRemoved;
+							if (h != null)
+								h(this, new RoomAndVersionEventArgs() {
+									RoomId = e.RoomId,
+									Version = version
+								});
+						};
 						lock (sync) {
 							domains[version] = dom;
 							try {

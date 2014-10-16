@@ -21,6 +21,11 @@ using System.Runtime.Remoting.Lifetime;
 
 namespace Merlion.Server
 {
+	sealed class RoomEventArgs: EventArgs
+	{
+		public byte[] RoomId;
+	}
+
 	sealed class Domain: IDisposable
 	{
 		static readonly ILog log = LogManager.GetLogger(typeof(Domain));
@@ -41,6 +46,9 @@ namespace Merlion.Server
 
 		readonly Dictionary<byte[], MerlionRoomImpl> rooms =
 			new Dictionary<byte[], MerlionRoomImpl>(Merlion.Utils.ByteArrayComparer.Instance);
+
+		public event EventHandler<RoomEventArgs> RoomBeingAdded;
+		public event EventHandler<RoomEventArgs> RoomRemoved;
 
 		public Domain (INodeServer node, string version)
 		{
@@ -197,6 +205,8 @@ namespace Merlion.Server
 		static readonly Random random = new Random();
 		sealed class MerlionRoomImpl: MerlionRoom
 		{
+			static readonly ILog log = LogManager.GetLogger(typeof(MerlionRoomImpl));
+
 			readonly byte[] roomId;
 			readonly Domain domain;
 
@@ -209,6 +219,17 @@ namespace Merlion.Server
 				lock (domain.rooms) {
 					domain.rooms.Add(roomId, this);
 				}
+				try {
+					var h = domain.RoomBeingAdded;
+					if (h != null)
+						h(domain, new RoomEventArgs() { RoomId = roomId });
+				} catch (Exception ex) {
+					lock (domain.rooms) {
+						domain.rooms.Remove(roomId);
+					}
+					log.Error("Error occured while creating a room.", ex);
+					throw;
+				}
 			}
 
 			public override byte[] GetRoomId ()
@@ -220,6 +241,14 @@ namespace Merlion.Server
 			{
 				lock (domain.rooms) {
 					domain.rooms.Remove (roomId);
+				}
+				try {
+					var h = domain.RoomRemoved;
+					if (h != null)
+						h(domain, new RoomEventArgs() { RoomId = roomId });
+				} catch (Exception ex) {
+					log.Error("Error occured while creating a room.", ex);
+					throw;
 				}
 			}
 		}

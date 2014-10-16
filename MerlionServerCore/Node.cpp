@@ -603,7 +603,7 @@ namespace mcore
 		sendCommand("UnbindRoom", [&](PacketGenerator& gen) {
 			gen.write(MasterCommand::UnbindRoom);
 			gen.writeString(room);
-		});
+		}, true);
 	}
 	void Node::sendLog(const LogEntry& entry)
 	{

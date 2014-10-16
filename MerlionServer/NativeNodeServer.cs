@@ -56,6 +56,13 @@ namespace Merlion.Server
 
 			domains = new DomainManager (this);
 
+			domains.RoomBeingAdded += (sender, e) => {
+				native.BindRoom(e.RoomId, e.Version);
+			};
+			domains.RoomRemoved += (sender, e) => {
+				native.UnbindRoom(e.RoomId, e.Version);
+			};
+
 			param.VersionLoader = (ver) => new Task(() => {
 				try {
 					domains.LoadVersion(ver);
