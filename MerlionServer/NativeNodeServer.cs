@@ -16,6 +16,7 @@
 
 using System;
 using log4net;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Merlion.Server
@@ -26,6 +27,8 @@ namespace Merlion.Server
 
 		readonly NativeServerInterop.NodeParameters param;
 		readonly NativeServerInterop.Node native;
+
+		readonly ReaderWriterLockSlim disposeLock = new ReaderWriterLockSlim ();
 
 		readonly VersionManager versionManager = new VersionManager();
 
@@ -61,17 +64,27 @@ namespace Merlion.Server
 			domains = new DomainManager (this);
 
 			domains.RoomBeingAdded += (sender, e) => {
-				native.BindRoom(e.RoomId, e.Version);
+				try {
+					disposeLock.EnterReadLock();
+					native.BindRoom(e.RoomId, e.Version);
+				} finally {
+					disposeLock.ExitReadLock ();
+				}
 			};
 			domains.RoomRemoved += (sender, e) => {
-				native.UnbindRoom(e.RoomId);
+				try {
+					disposeLock.EnterReadLock();
+					native.UnbindRoom(e.RoomId);
+				} finally {
+					disposeLock.ExitReadLock ();
+				}
 			};
 
 			param.VersionLoader = (ver) => new Task(() => {
 				try {
 					domains.LoadVersion(ver);
 				} catch (Exception ex) {
-					log.Warn(string.Format("Error while loading version '{0}'.", 
+					log.Error(string.Format("Error while loading version '{0}'.", 
 						ver), ex);
 					throw;
 				}
@@ -80,7 +93,7 @@ namespace Merlion.Server
 				try {
 					domains.UnloadVersion(ver);
 				} catch (Exception ex) {
-					log.Warn(string.Format("Error while unloading version '{0}'.", 
+					log.Error(string.Format("Error while unloading version '{0}'.", 
 						ver), ex);
 					throw;
 				}
@@ -136,17 +149,32 @@ namespace Merlion.Server
 
 		public void SendVersionLoaded (string name)
 		{
-			native.VersionLoaded (name);
+			try {
+				disposeLock.EnterReadLock();
+				native.VersionLoaded (name);
+			} finally {
+				disposeLock.ExitReadLock ();
+			}
 		}
 
 		public void SendVersionUnloaded (string name)
 		{
-			native.VersionUnloaded (name);
+			try {
+				disposeLock.EnterReadLock();
+				native.VersionUnloaded (name);
+			} finally {
+				disposeLock.ExitReadLock ();
+			}
 		}
 
 		public void SendLog(LogEntry e)
 		{
-			native.ForwardLog (e);
+			try {
+				disposeLock.EnterReadLock();
+				native.ForwardLog (e);
+			} finally {
+				disposeLock.ExitReadLock ();
+			}
 		}
 
 		public void VersionMissing ()
@@ -163,7 +191,12 @@ namespace Merlion.Server
 
 		public void Dispose()
 		{
-			native.Dispose ();
+			try {
+				disposeLock.EnterWriteLock();
+				native.Dispose ();
+			} finally {
+				disposeLock.ExitWriteLock ();
+			}
 		}
 	}
 }
