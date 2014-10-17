@@ -150,6 +150,9 @@ extern "C" {
 	
 	typedef std::uint32_t (*MSCDiscardClientCallback)
 	(std::uint64_t clientId, void *userdata);
+		
+	typedef std::uint32_t (*MSCNodeFailureCallback)
+	(void *userdata);
 	
 	struct MSCNodeParameters
 	{
@@ -179,6 +182,9 @@ extern "C" {
 		
 		MSCDiscardClientCallback discardClientCallback;
 		void *discardClientCallbackUserData;
+		
+		MSCNodeFailureCallback failureCallback;
+		void *failureCallbackUserData;
 	};
 	
 	extern MSCResult MSCNodeCreate(MSCLibrary library,

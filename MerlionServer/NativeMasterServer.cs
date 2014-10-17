@@ -30,7 +30,7 @@ namespace Merlion.Server
 		readonly VersionManager versionManager = new VersionManager();
 		readonly Balancer balancer = new Balancer();
 
-		readonly NativeNodeServer localNodeServer;
+		readonly NativeNodeServerManager localNodeServer;
 
 		readonly System.Threading.Thread saveBalancerConfigThread;
 		volatile bool stopRequested = false;
@@ -89,7 +89,7 @@ namespace Merlion.Server
 
 			System.Threading.Thread.Sleep (500);
 			log.Info("Starting local node.");
-			localNodeServer = new NativeNodeServer ("Local", new System.Net.IPEndPoint (
+			localNodeServer = new NativeNodeServerManager ("Local", new System.Net.IPEndPoint (
 				System.Net.IPAddress.Loopback, AppConfiguration.MasterServerAddress.Port));
 
 			saveBalancerConfigThread = new System.Threading.Thread (() => {

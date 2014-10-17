@@ -34,6 +34,8 @@ namespace Merlion.Server
 		void SendLog(LogEntry e);
 		void VersionMissing();
 		string Name { get; }
+		event EventHandler NodeFailed;
+		bool Failed { get; }
 	}
 
 }

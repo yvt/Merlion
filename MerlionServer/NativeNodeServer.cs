@@ -31,6 +31,10 @@ namespace Merlion.Server
 
 		readonly DomainManager domains;
 
+		public event EventHandler NodeFailed;
+
+		public bool Failed { get; private set; }
+
 		public NativeNodeServer (string name, System.Net.IPEndPoint ep)
 		{
 			if (name == null) {
@@ -60,7 +64,7 @@ namespace Merlion.Server
 				native.BindRoom(e.RoomId, e.Version);
 			};
 			domains.RoomRemoved += (sender, e) => {
-				native.UnbindRoom(e.RoomId, e.Version);
+				native.UnbindRoom(e.RoomId);
 			};
 
 			param.VersionLoader = (ver) => new Task(() => {
@@ -114,7 +118,12 @@ namespace Merlion.Server
 					throw;
 				}
 			};
-
+			param.FailureHandler = () => {
+				Failed = true;
+				var h = NodeFailed;
+				if (h != null)
+					h(this, EventArgs.Empty);
+			};
 
 			native = new NativeServerInterop.Node (param);
 

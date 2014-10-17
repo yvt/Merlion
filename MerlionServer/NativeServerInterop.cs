@@ -206,6 +206,9 @@ namespace Merlion.Server
 			ulong clientId,
 			IntPtr userdata);
 
+		delegate uint MSCNodeFailureCallback(
+			IntPtr userdata);
+
 		struct MSCNodeParameters
 		{
 			[MarshalAs(UnmanagedType.LPStr)]
@@ -253,6 +256,13 @@ namespace Merlion.Server
 			public MSCDiscardClientCallback discardClientCallback;
 
 			public IntPtr discardClientCallbackUserData;
+
+			[MarshalAs(UnmanagedType.FunctionPtr)]
+			public MSCNodeFailureCallback failureCallback;
+
+			public IntPtr failureCallbackUserData;
+
+
 		}
 
 		[DllImport("MerlionServerCore")]
@@ -629,6 +639,7 @@ namespace Merlion.Server
 			public delegate void AcceptClientDelegate(ulong clientId, string version, byte[] room);
 			public delegate void SetupClientDelegate(ulong clientId, ClientSetup setup);
 			public delegate void DiscardClientDelegate(ulong clientId);
+			public delegate void FailureDelegate();
 
 			public string NodeName;
 			public string MasterEndpoint;
@@ -640,6 +651,7 @@ namespace Merlion.Server
 			public AcceptClientDelegate AcceptClientMethod;
 			public SetupClientDelegate SetupClientMethod;
 			public DiscardClientDelegate DiscardClientMethod;
+			public FailureDelegate FailureHandler;
 		}
 		public sealed class Node: IDisposable
 		{
@@ -660,9 +672,20 @@ namespace Merlion.Server
 					unloadVersionCallback = HandleMSCUnloadVersionCallback,
 					acceptClientCallback = HandleMSCAcceptClientCallback,
 					discardClientCallback = HandleMSCDiscardClientCallback,
-					setupClientCallback = HandleMSCSetupClientCallback
+					setupClientCallback = HandleMSCSetupClientCallback,
+					failureCallback = HandleMSCNodeFailureCallback
 				};
 				CheckResult(MSCNodeCreate(library.SafeHandle, paramMarshaled, out handle));
+			}
+
+			uint HandleMSCNodeFailureCallback (IntPtr userdata)
+			{
+				try {
+					param.FailureHandler();
+					return 0;
+				} catch {
+					return 1;
+				}
 			}
 
 			uint HandleMSCSetupClientCallback (ulong clientId, [MarshalAs(UnmanagedType.LPStruct)] ref MSCClientSetup setup, IntPtr userdata)

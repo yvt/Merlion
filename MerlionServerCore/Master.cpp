@@ -592,7 +592,9 @@ extern "C" MSCResult MSCMasterCreate(MSCLibrary library,
 {
     return mcore::convertExceptionsToResultCode([&] {
         *master = nullptr;
-
+		
+		if (!master)
+			MSCThrow(mcore::InvalidArgumentException("master"));
         if (library == nullptr) {
             MSCThrow(mcore::InvalidArgumentException("library"));
         }
@@ -607,27 +609,35 @@ extern "C" MSCResult MSCMasterCreate(MSCLibrary library,
 
 extern "C" MSCResult MSCMasterDestroy(MSCMaster master)
 {
-    return mcore::convertExceptionsToResultCode([&] {
+	return mcore::convertExceptionsToResultCode([&] {
+		if (!master)
+			MSCThrow(mcore::InvalidArgumentException("master"));
         delete mcore::Master::fromHandle(master);
     });
 }
 
 extern "C" MSCResult MSCMasterAddVersion(MSCMaster master, const char *versionName)
 {
-    return mcore::convertExceptionsToResultCode([&] {
+	return mcore::convertExceptionsToResultCode([&] {
+		if (!master)
+			MSCThrow(mcore::InvalidArgumentException("master"));
         mcore::Master::fromHandle(master)->addVersion(versionName);
     });
 }
 extern "C" MSCResult MSCMasterRemoveVersion(MSCMaster master, const char *versionName)
 {
-    return mcore::convertExceptionsToResultCode([&] {
+	return mcore::convertExceptionsToResultCode([&] {
+		if (!master)
+			MSCThrow(mcore::InvalidArgumentException("master"));
         mcore::Master::fromHandle(master)->removeVersion(versionName);
     });
 }
 extern "C" MSCResult MSCMasterSetVersionThrottle(MSCMaster master,
 												 const char *versionName, double throttle)
 {
-    return mcore::convertExceptionsToResultCode([&] {
+	return mcore::convertExceptionsToResultCode([&] {
+		if (!master)
+			MSCThrow(mcore::InvalidArgumentException("master"));
         mcore::Master::fromHandle(master)->setVersionThrottle(versionName, throttle);
     });
 }
@@ -635,6 +645,8 @@ extern "C" MSCResult MSCMasterSetNodeThrottle(MSCMaster master,
 											  const char *nodeName, double throttle)
 {
 	return mcore::convertExceptionsToResultCode([&] {
+		if (!master)
+			MSCThrow(mcore::InvalidArgumentException("master"));
 		mcore::Master::fromHandle(master)->setNodeThrottle(nodeName, throttle);
 	});
 }
@@ -644,6 +656,8 @@ extern "C" MSCResult MSCMasterEnumerateNodes(MSCMaster master,
 									 void *userdata)
 {
 	return mcore::convertExceptionsToResultCode([&] {
+		if (!master)
+			MSCThrow(mcore::InvalidArgumentException("master"));
 		auto *m = mcore::Master::fromHandle(master);
 		for (const auto& node: m->getAllNodes()) {
 			if (nodeCallback != nullptr) {

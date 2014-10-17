@@ -40,6 +40,7 @@ namespace mcore
 		std::function<void(std::uint64_t, const std::string&, const std::string&)> acceptClientFunction;
 		std::function<void(std::uint64_t, const ClientSetup&)> setupClientFunction;
 		std::function<void(std::uint64_t)> destroyClientFunction;
+		std::function<void()> failureFunction;
 		
 		NodeParameters() = default;
 		NodeParameters(MSCNodeParameters const &param);
@@ -49,7 +50,8 @@ namespace mcore
 	class NodeClient;
 	class NodeVersionLoader;
 	
-	class Node: boost::noncopyable, LibraryListener
+	class Node: boost::noncopyable, LibraryListener,
+	public std::enable_shared_from_this<Node>
 	{
 		std::shared_ptr<Library> _library;
 		TypedLogger<Node> log;
@@ -63,6 +65,7 @@ namespace mcore
 		std::recursive_mutex socketMutex;
 		volatile bool down;
 		volatile bool beingDisposed;
+		std::atomic<bool> started;
 		
 		std::mutex asyncDoneMutex;
 		
@@ -75,12 +78,11 @@ namespace mcore
 		std::unordered_map<std::string, std::shared_ptr<NodeDomain>> domains;
 		
 		void onBeingDestroyed(Library&) override;
-		void invalidate();
 		void checkValid() const;
 		
 		void setTimeout();
 		void shutdown();
-		void scheduleReconnect();
+		void nodeFailure();
 		
 		void connectAsync();
 		void sendHeader();
@@ -101,6 +103,9 @@ namespace mcore
 		Node(const std::shared_ptr<Library>&, const NodeParameters&);
 		~Node();
 		
+		void start();
+		void invalidate();
+		
 		const std::shared_ptr<Library>& library() const { return _library; }
 		const NodeParameters& parameters() const { return _parameters; }
 		const boost::asio::ip::tcp::endpoint& masterEndpoint() const
@@ -113,7 +118,7 @@ namespace mcore
 		
 		void sendLog(const LogEntry&);
 		
-		MSCNode handle() { return reinterpret_cast<MSCNode>(this); }
-		static Node *fromHandle(MSCNode handle) { return reinterpret_cast<Node *>(handle); }
+		MSCNode handle() { return reinterpret_cast<MSCNode>(new std::shared_ptr<Node>(shared_from_this())); }
+		static std::shared_ptr<Node> *fromHandle(MSCNode handle) { return reinterpret_cast<std::shared_ptr<Node> *>(handle); }
 	};
 }

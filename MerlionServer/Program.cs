@@ -27,7 +27,14 @@ namespace Merlion.Server
 		static CommandLineArguments Arguments;
 
 		public static IMasterServer MasterServer;
-		public static INodeServer NodeServer;
+		public static NativeNodeServerManager NodeServerManager;
+		public static INodeServer NodeServer { 
+			get {
+				if (NodeServerManager == null)
+					return null;
+				return NodeServerManager.NodeServer;
+			} 
+		}
 
 		public static void Main (string[] args)
 		{
@@ -110,7 +117,7 @@ namespace Merlion.Server
 				}
 
 			} else {
-				NodeServer = new NativeNodeServer (Arguments.NodeName, Arguments.MasterServerEndpoint);
+				NodeServerManager = new NativeNodeServerManager (Arguments.NodeName, Arguments.MasterServerEndpoint);
 				while (true) Thread.Sleep (1000);
 				//NodeServer.Run ();
 			}

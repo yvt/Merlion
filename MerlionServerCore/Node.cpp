@@ -137,6 +137,17 @@ namespace mcore
 				MSCThrow(InvalidOperationException("Discarding client failed."));
 			}
 		};
+		
+		if (param.failureCallback == nullptr) {
+			MSCThrow(InvalidArgumentException("failureCallback"));
+		}
+		auto *failureCallback = param.failureCallback;
+		auto *failureCallbackData = param.failureCallbackUserData;
+		failureFunction = [=]() {
+			if (failureCallback(failureCallbackData)) {
+				MSCThrow(InvalidOperationException("Reporting node failure failed."));
+			}
+		};
 	}
 
 	Node::Node(const std::shared_ptr<Library> &library, const NodeParameters &parameters):
@@ -148,6 +159,7 @@ namespace mcore
 	endpoint(parseTcpEndpoint(parameters.masterEndpoint)),
 	down(true),
 	beingDisposed(false),
+	started(false),
 	startTime(boost::posix_time::second_clock::universal_time())
 	{
 		BOOST_LOG_SEV(log, LogLevel::Info) << "Starting as '" << parameters.nodeName << "'.";
@@ -209,6 +221,16 @@ namespace mcore
 			versionsToLoad.erase(version);
 		});
 		
+	}
+	
+	void Node::start()
+	{
+		auto self = shared_from_this();
+		if (started.exchange(true)) {
+			MSCThrow(InvalidOperationException("mcore::Node::start was called twice."));
+		}
+		
+		
 		std::lock_guard<std::recursive_mutex> lock(socketMutex);
 		asyncDoneMutex.lock();
 		connectAsync();
@@ -261,14 +283,25 @@ namespace mcore
 		timeoutTimer.cancel();
 		timeoutTimer.expires_from_now(boost::posix_time::seconds(5));
 		timeoutTimer.async_wait([this](const boost::system::error_code& error) {
+			auto self = shared_from_this();
 			if (error) return;
 			BOOST_LOG_SEV(log, LogLevel::Error) << "Timed out. Disconnecting.";
 			
 			std::lock_guard<std::recursive_mutex> lock(socketMutex);
 			
-			shutdown();
-			scheduleReconnect();
+			nodeFailure();
 		});
+	}
+	
+	void Node::nodeFailure()
+	{
+		auto self = shared_from_this();
+		std::lock_guard<std::recursive_mutex> lock(socketMutex);
+		BOOST_LOG_SEV(log, LogLevel::Warn) << "Reporting node failure.";
+		
+		shutdown();
+		
+		_parameters.failureFunction();
 	}
 	
 	void Node::shutdown()
@@ -295,25 +328,6 @@ namespace mcore
 		
 	}
 	
-	void Node::scheduleReconnect()
-	{
-		if (beingDisposed) {
-			BOOST_LOG_SEV(log, LogLevel::Debug) << "NOT scheduling reconnection. Node is being down.";
-			asyncDoneMutex.unlock();
-			return;
-		}
-		BOOST_LOG_SEV(log, LogLevel::Info) << "Scheduling reconnection.";
-		reconnectTimer.expires_from_now(boost::posix_time::seconds(5));
-		reconnectTimer.async_wait([this](const boost::system::error_code& error) {
-			if (error) {
-				BOOST_LOG_SEV(log, LogLevel::Debug) << "Reconnection cancelled.";
-				asyncDoneMutex.unlock();
-				return;
-			}
-			connectAsync();
-		});
-	}
-	
 	void Node::connectAsync()
 	{
 		BOOST_LOG_SEV(log, LogLevel::Info) << "Connecting to " << endpoint << ".";
@@ -322,6 +336,7 @@ namespace mcore
 		
 		try {
 			socket.async_connect(endpoint, [this](const boost::system::error_code& error) {
+				auto self = shared_from_this();
 				std::lock_guard<std::recursive_mutex> lock(socketMutex);
 				
 				try {
@@ -335,15 +350,14 @@ namespace mcore
 					BOOST_LOG_SEV(log, LogLevel::Error) << "Failed to connect.: " <<
 					boost::current_exception_diagnostic_information();
 					try { socket.close(); } catch (...) { }
-					shutdown();
-					scheduleReconnect();
+					nodeFailure();
 				}
 			});
 		} catch (...) {
 			BOOST_LOG_SEV(log, LogLevel::Error) << "Failed to connect.: " <<
 			boost::current_exception_diagnostic_information();
 			try { socket.close(); } catch (...) { }
-			scheduleReconnect();
+			nodeFailure();
 		}
 	}
 	
@@ -373,6 +387,7 @@ namespace mcore
 		
 		asio::async_write(socket, buffers, [this, buf1, buf2](const boost::system::error_code& err, std::size_t)
 		{
+			auto self = shared_from_this();
 			std::lock_guard<std::recursive_mutex> lock(socketMutex);
 			
 			try {
@@ -388,8 +403,7 @@ namespace mcore
 			} catch (...) {
 				BOOST_LOG_SEV(log, LogLevel::Error) << "Failed to send NodeInfo.: " <<
 				boost::current_exception_diagnostic_information();
-				shutdown();
-				scheduleReconnect();
+				nodeFailure();
 			}
 		});
 	}
@@ -401,6 +415,7 @@ namespace mcore
 		std::lock_guard<std::recursive_mutex> lock(socketMutex);
 		
 		asio::async_read(socket, asio::buffer(buf.get(), 4), [this, buf](const boost::system::error_code& err, std::size_t) {
+			auto self = shared_from_this();
 			std::lock_guard<std::recursive_mutex> lock(socketMutex);
 				
 			try {
@@ -417,8 +432,7 @@ namespace mcore
 			} catch (...) {
 				BOOST_LOG_SEV(log, LogLevel::Error) << "Failed to receive command.: " <<
 				boost::current_exception_diagnostic_information();
-				shutdown();
-				scheduleReconnect();
+				nodeFailure();
 			}
 		});
 	}
@@ -430,6 +444,7 @@ namespace mcore
 		std::lock_guard<std::recursive_mutex> lock(socketMutex);
 	
 		asio::async_read(socket, asio::buffer(*buf), [this, buf](const boost::system::error_code& err, std::size_t) {
+			auto self = shared_from_this();
 			std::lock_guard<std::recursive_mutex> lock(socketMutex);
 			try {
 				if (err) {
@@ -522,8 +537,7 @@ namespace mcore
 			} catch (...) {
 				BOOST_LOG_SEV(log, LogLevel::Error) << "Failed to send NodeInfo.: " <<
 				boost::current_exception_diagnostic_information();
-				shutdown();
-				scheduleReconnect();
+				nodeFailure();
 			}
 		});
 	}
@@ -546,7 +560,8 @@ namespace mcore
 			return;
 		}
 		
-		asio::async_write(socket, asio::buffer(*buf), [this, buf, name, unreliable](const boost::system::error_code& err, std::size_t) {
+		auto self = shared_from_this();
+		asio::async_write(socket, asio::buffer(*buf), [this, self, buf, name, unreliable](const boost::system::error_code& err, std::size_t) {
 			std::lock_guard<std::recursive_mutex> lock(socketMutex);
 			try {
 				if (err) {
@@ -557,8 +572,7 @@ namespace mcore
 					return;
 				BOOST_LOG_SEV(log, LogLevel::Error) << "Failed to send " << name << ".: " <<
 				boost::current_exception_diagnostic_information();
-				shutdown();
-				scheduleReconnect();
+				nodeFailure();
 			}
 		});
 	}
@@ -618,6 +632,7 @@ namespace mcore
 	
 	void Node::versionLoaded(const std::string &v)
 	{
+		auto self = shared_from_this();
 		std::lock_guard<std::recursive_mutex> lock(socketMutex);
 		if (down)
 			return;
@@ -625,6 +640,7 @@ namespace mcore
 	}
 	void Node::versionUnloaded(const std::string &v)
 	{
+		auto self = shared_from_this();
 		std::lock_guard<std::recursive_mutex> lock(socketMutex);
 		if (down)
 			return;
@@ -632,6 +648,7 @@ namespace mcore
 	}
 	void Node::bindRoom(const std::string &room, const std::string &version)
 	{
+		auto self = shared_from_this();
 		std::lock_guard<std::recursive_mutex> lock(socketMutex);
 		if (down)
 			return;
@@ -639,6 +656,7 @@ namespace mcore
 	}
 	void Node::unbindRoom(const std::string &room)
 	{
+		auto self = shared_from_this();
 		std::lock_guard<std::recursive_mutex> lock(socketMutex);
 		if (down)
 			return;
@@ -647,6 +665,7 @@ namespace mcore
 	
 	void Node::loadDomainIfNotLoaded(const std::string &version)
 	{
+		auto self = shared_from_this();
 		std::lock_guard<std::recursive_mutex> lock(socketMutex);
 		
 		if (domains.find(version) != domains.end())
@@ -670,6 +689,9 @@ extern "C" MSCResult MSCNodeCreate(MSCLibrary library,
 								   MSCNodeParameters *params, MSCNode *node)
 {
 	return mcore::convertExceptionsToResultCode([&] {
+		if (!node)
+			MSCThrow(mcore::InvalidArgumentException("node"));
+		
 		*node = nullptr;
 		
 		if (library == nullptr) {
@@ -679,7 +701,9 @@ extern "C" MSCResult MSCNodeCreate(MSCLibrary library,
 			MSCThrow(mcore::InvalidArgumentException("params"));
 		}
 		
-		auto *m = new mcore::Node(*mcore::Library::fromHandle(library), *params);
+		auto m = std::make_shared<mcore::Node>(*mcore::Library::fromHandle(library), *params);
+		m->start();
+		
 		*node = m->handle();
 	});
 }
@@ -687,7 +711,11 @@ extern "C" MSCResult MSCNodeCreate(MSCLibrary library,
 extern "C" MSCResult MSCNodeDestroy(MSCNode node)
 {
 	return mcore::convertExceptionsToResultCode([&] {
-		delete mcore::Node::fromHandle(node);
+		if (!node)
+			MSCThrow(mcore::InvalidArgumentException("node"));
+		auto *h = mcore::Node::fromHandle(node);
+		(*h)->invalidate();
+		delete h;
 	});
 }
 
@@ -695,10 +723,12 @@ extern "C" MSCResult MSCNodeDestroy(MSCNode node)
 extern "C" MSCResult MSCNodeVersionLoaded(MSCNode node, const char *version)
 {
 	return mcore::convertExceptionsToResultCode([&] {
+		if (!node)
+			MSCThrow(mcore::InvalidArgumentException("node"));
 		if (version == nullptr) {
 			MSCThrow(mcore::InvalidArgumentException("version"));
 		}
-		auto *n = mcore::Node::fromHandle(node);
+		auto n = *mcore::Node::fromHandle(node);
 		n->versionLoaded(version);
 	});
 }
@@ -706,10 +736,12 @@ extern "C" MSCResult MSCNodeVersionLoaded(MSCNode node, const char *version)
 extern "C" MSCResult MSCNodeVersionUnloaded(MSCNode node, const char *version)
 {
 	return mcore::convertExceptionsToResultCode([&] {
+		if (!node)
+			MSCThrow(mcore::InvalidArgumentException("node"));
 		if (version == nullptr) {
 			MSCThrow(mcore::InvalidArgumentException("version"));
 		}
-		auto *n = mcore::Node::fromHandle(node);
+		auto n = *mcore::Node::fromHandle(node);
 		n->versionUnloaded(version);
 	});
 }
@@ -717,10 +749,12 @@ extern "C" MSCResult MSCNodeVersionUnloaded(MSCNode node, const char *version)
 extern "C" MSCResult MSCNodeForwardLog(MSCNode node, const MSCLogEntry *entry)
 {
 	return mcore::convertExceptionsToResultCode([&] {
+		if (!node)
+			MSCThrow(mcore::InvalidArgumentException("node"));
 		if (entry == nullptr) {
 			MSCThrow(mcore::InvalidArgumentException("entry"));
 		}
-		auto *n = mcore::Node::fromHandle(node);
+		auto n = *mcore::Node::fromHandle(node);
 		mcore::LogEntry entry2 = *entry;
 		// FIXME: this might be dispatched after node was destroyed
 		n->library()->ioService().post([entry2, n] {
