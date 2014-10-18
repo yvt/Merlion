@@ -86,6 +86,8 @@ namespace mcore
         std::list<std::shared_ptr<MasterNodeConnection>> nodeConnections;
         boost::asio::ip::tcp::acceptor nodeAcceptor;
         std::mutex nodeAcceptorMutex;
+		std::condition_variable nodeAcceptorCV;
+		bool nodeAcceptorRunning;
         std::recursive_mutex nodeConnectionsMutex;
         void removeNodeConnection(const std::list<std::shared_ptr<MasterNodeConnection>>::iterator&);
         void acceptNodeConnectionAsync(bool initial);
@@ -96,7 +98,9 @@ namespace mcore
         std::shared_ptr<MasterClient> waitingClient;
         std::unordered_map<std::uint64_t, std::shared_ptr<MasterClient>> clients;
         boost::asio::ip::tcp::acceptor clientAcceptor;
-        std::mutex clientAcceptorMutex;
+		std::mutex clientAcceptorMutex;
+		std::condition_variable clientAcceptorCV;
+		bool clientAcceptorRunning;
         std::recursive_mutex clientsMutex;
 		void removeClient(std::uint64_t);
         void acceptClientAsync(bool initial);

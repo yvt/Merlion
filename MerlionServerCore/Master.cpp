@@ -76,14 +76,16 @@ namespace mcore
     }
 
     Master::Master(const std::shared_ptr<Library>& library, const MasterParameters& parameters):
-            _library(library),
-            _parameters(parameters),
-            nodeAcceptor(library->ioService(), parseTcpEndpoint(parameters.nodeEndpoint)),
-            clientAcceptor(library->ioService(), parseTcpEndpoint(parameters.clientEndpoint)),
-            heartbeatTimer(library->ioService()),
-            heartbeatRunning(true),
-            _sslContext(ssl::context::tlsv1),
-            disposed(false)
+	_library(library),
+	_parameters(parameters),
+	nodeAcceptor(library->ioService(), parseTcpEndpoint(parameters.nodeEndpoint)),
+	clientAcceptor(library->ioService(), parseTcpEndpoint(parameters.clientEndpoint)),
+	heartbeatTimer(library->ioService()),
+	heartbeatRunning(true),
+	_sslContext(ssl::context::tlsv1),
+	disposed(false),
+	nodeAcceptorRunning(true),
+	clientAcceptorRunning(true)
 	{
 		// Setup SSL
 		std::string pw = parameters.sslPassword;
@@ -113,10 +115,6 @@ namespace mcore
 		}
 		
 		BOOST_LOG_SEV(log, LogLevel::Debug) << "SSL is ready.";
-
-        // Ensure Master is not destroyed until async operation completes
-        nodeAcceptorMutex.lock();
-        clientAcceptorMutex.lock();
 		
 		// Prepare to accept the first client and node
 		BOOST_LOG_SEV(log, LogLevel::Debug) << "Preparing to accept clients and nodes.";
@@ -197,33 +195,44 @@ namespace mcore
 			format("Listening for nodes at %s.") % nodeAcceptor.local_endpoint();
 		}
 		
-        nodeAcceptor.async_accept(waitingNodeConnection->tcpSocket(),
-        [=](const boost::system::error_code& errorCode) {
-            if (errorCode.value() == boost::asio::error::operation_aborted || disposed) {
-                nodeAcceptorMutex.unlock();
-                return;
-            } else if (errorCode) {
-				if (initial) {
-					BOOST_LOG_SEV(log, LogLevel::Fatal) <<
-					format("Accepting node connection failed: %s.") % errorCode;
+		try {
+			nodeAcceptor.async_accept(waitingNodeConnection->tcpSocket(),
+			[=](const boost::system::error_code& errorCode) {
+				if (errorCode.value() == boost::asio::error::operation_aborted || disposed) {
+					std::lock_guard<std::mutex> guard(nodeAcceptorMutex);
+					nodeAcceptorRunning = false;
+					nodeAcceptorCV.notify_all();
+					return;
+				} else if (errorCode) {
+					if (initial) {
+						BOOST_LOG_SEV(log, LogLevel::Fatal) <<
+						format("Accepting node connection failed: %s.") % errorCode;
+					}
+					std::lock_guard<std::mutex> guard(nodeAcceptorMutex);
+					nodeAcceptorRunning = false;
+					nodeAcceptorCV.notify_all();
+					return;
+				} else {
+					// New node connected.
+					auto conn = waitingNodeConnection;
+					{
+						std::lock_guard<std::recursive_mutex> lock(nodeConnectionsMutex);
+						nodeConnections.push_front(waitingNodeConnection);
+						waitingNodeConnection->iter = nodeConnections.begin();
+						waitingNodeConnection = std::make_shared<MasterNodeConnection>(*this);
+					}
+					conn->didAccept();
 				}
-				nodeAcceptorMutex.unlock();
-				return;
-            } else {
-				// New node connected.
-                auto conn = waitingNodeConnection;
-                {
-                    std::lock_guard<std::recursive_mutex> lock(nodeConnectionsMutex);
-                    nodeConnections.push_front(waitingNodeConnection);
-					waitingNodeConnection->iter = nodeConnections.begin();
-                    waitingNodeConnection = std::make_shared<MasterNodeConnection>(*this);
-                }
-                conn->didAccept();
-            }
 
-            // Accept next connection
-            acceptNodeConnectionAsync(false);
-        });
+				// Accept next connection
+				acceptNodeConnectionAsync(false);
+			});
+		} catch (...) {
+			std::lock_guard<std::mutex> guard(nodeAcceptorMutex);
+			nodeAcceptorRunning = false;
+			nodeAcceptorCV.notify_all();
+			throw;
+		}
     }
 
     void Master::removeNodeConnection(const std::list<std::shared_ptr<MasterNodeConnection>>::iterator& it)
@@ -238,105 +247,116 @@ namespace mcore
 			BOOST_LOG_SEV(log, LogLevel::Info) <<
 			format("Listening for clients at %s.") % clientAcceptor.local_endpoint();
 		}
-        clientAcceptor.async_accept(waitingClient->tcpSocket(),
-        [=](const boost::system::error_code& errorCode) {
-            if (errorCode.value() == boost::asio::error::operation_aborted || disposed) {
-                clientAcceptorMutex.unlock();
-                return;
-            } else if (errorCode) {
-				if (initial) {
-					BOOST_LOG_SEV(log, LogLevel::Fatal) <<
-					format("Accepting client connection failed: %s.") % errorCode;
-				}
-				clientAcceptorMutex.unlock();
-				return;
-            } else {
-				// New client connected.
-                auto conn = waitingClient;
-				
-				// Prepare to accept the next client.
-                {
-                    std::lock_guard<std::recursive_mutex> lock(clientsMutex);
-                    clients[conn->id()] = std::move(waitingClient);
-                    waitingClient = std::make_shared<MasterClient>(*this, conn->id() + 1,
-																   _parameters.allowVersionSpecification);
-                }
-				
-				std::weak_ptr<MasterClient> weakConn(conn);
-				
-				// Setup "someone needs to respond to me" handler
-				conn->onNeedsResponse.connect([this, weakConn](const std::shared_ptr<MasterClientResponse>& r) {
-					
-					auto conn = weakConn.lock();
-					if (!conn) {
-						// Unexpected...
-						BOOST_LOG_SEV(log, LogLevel::Error) <<
-						"onNeedsResponse raised by unexistent MasterClient.";
-						return;
+		try {
+			clientAcceptor.async_accept(waitingClient->tcpSocket(),
+			[=](const boost::system::error_code& errorCode) {
+				if (errorCode.value() == boost::asio::error::operation_aborted || disposed) {
+					std::lock_guard<std::mutex> guard(clientAcceptorMutex);
+					clientAcceptorRunning = false;
+					clientAcceptorCV.notify_all();
+					return;
+				} else if (errorCode) {
+					if (initial) {
+						BOOST_LOG_SEV(log, LogLevel::Fatal) <<
+						format("Accepting client connection failed: %s.") % errorCode;
 					}
+					std::lock_guard<std::mutex> guard(clientAcceptorMutex);
+					clientAcceptorRunning = false;
+					clientAcceptorCV.notify_all();
+					return;
+				} else {
+					// New client connected.
+					auto conn = waitingClient;
 					
-					// Use balancer to choose a server.
-					auto domain = bindClientToDomain(conn);
-					 
-					if (!domain) {
-						r->reject("Could not find a suitable domain. Overload possible.");
-						return;
-					}
-					
-					auto version = domain->second;
-					
-					BOOST_LOG_SEV(log, LogLevel::Debug) <<
-					format("Bound client '%d' to '%s' at '%s'.") % conn->id() %
-					version % domain->first->nodeInfo().nodeName;
-					
-					// Make sure MasterClientResponse is in pendingClients
-					// until it is done
+					// Prepare to accept the next client.
 					{
-						std::lock_guard<std::recursive_mutex> lock(pendingClientsMutex);
-						PendingClient pend;
-						pend.response = r;
-						pend.version = version;
-						pendingClients.emplace(r->client()->id(), std::move(pend));
+						std::lock_guard<std::recursive_mutex> lock(clientsMutex);
+						clients[conn->id()] = std::move(waitingClient);
+						waitingClient = std::make_shared<MasterClient>(*this, conn->id() + 1,
+																	   _parameters.allowVersionSpecification);
 					}
 					
-					std::function<void(bool)> onResponded = [this, conn](bool) {
-						std::lock_guard<std::recursive_mutex> lock(pendingClientsMutex);
-						pendingClients.erase(conn->id());
-					};
+					std::weak_ptr<MasterClient> weakConn(conn);
 					
-					r->onResponded.connect(onResponded);
+					// Setup "someone needs to respond to me" handler
+					conn->onNeedsResponse.connect([this, weakConn](const std::shared_ptr<MasterClientResponse>& r) {
+						
+						auto conn = weakConn.lock();
+						if (!conn) {
+							// Unexpected...
+							BOOST_LOG_SEV(log, LogLevel::Error) <<
+							"onNeedsResponse raised by unexistent MasterClient.";
+							return;
+						}
+						
+						// Use balancer to choose a server.
+						auto domain = bindClientToDomain(conn);
+						 
+						if (!domain) {
+							r->reject("Could not find a suitable domain. Overload possible.");
+							return;
+						}
+						
+						auto version = domain->second;
+						
+						BOOST_LOG_SEV(log, LogLevel::Debug) <<
+						format("Bound client '%d' to '%s' at '%s'.") % conn->id() %
+						version % domain->first->nodeInfo().nodeName;
+						
+						// Make sure MasterClientResponse is in pendingClients
+						// until it is done
+						{
+							std::lock_guard<std::recursive_mutex> lock(pendingClientsMutex);
+							PendingClient pend;
+							pend.response = r;
+							pend.version = version;
+							pendingClients.emplace(r->client()->id(), std::move(pend));
+						}
+						
+						std::function<void(bool)> onResponded = [this, conn](bool) {
+							std::lock_guard<std::recursive_mutex> lock(pendingClientsMutex);
+							pendingClients.erase(conn->id());
+						};
+						
+						r->onResponded.connect(onResponded);
+						
+						// It is not impossible that time-out already happened...
+						if (r->isResponded()) {
+							onResponded(false);
+							return;
+						}
+						
+						// Let node process the response.
+						domain->first->acceptClient(r, version);
+					});
 					
-					// It is not impossible that time-out already happened...
-					if (r->isResponded()) {
-						onResponded(false);
-						return;
-					}
+					// Register client shutdown handler.
+					conn->onShutdown.connect([this, weakConn]() {
+						
+						auto conn = weakConn.lock();
+						if (!conn) {
+							// Unexpected...
+							BOOST_LOG_SEV(log, LogLevel::Error) <<
+							"onShutdown raised by unexistent MasterClient.";
+							return;
+						}
+						
+						removeClient(conn->id());
+					});
 					
-					// Let node process the response.
-					domain->first->acceptClient(r, version);
-				});
-				
-				// Register client shutdown handler.
-				conn->onShutdown.connect([this, weakConn]() {
-					
-					auto conn = weakConn.lock();
-					if (!conn) {
-						// Unexpected...
-						BOOST_LOG_SEV(log, LogLevel::Error) <<
-						"onShutdown raised by unexistent MasterClient.";
-						return;
-					}
-					
-					removeClient(conn->id());
-				});
-				
-				// Start service
-                conn->didAccept();
-            }
+					// Start service
+					conn->didAccept();
+				}
 
-            // Accept next connection
-            acceptClientAsync(false);
-        });
+				// Accept next connection
+				acceptClientAsync(false);
+			});
+		} catch (...) {
+			std::lock_guard<std::mutex> guard(clientAcceptorMutex);
+			clientAcceptorRunning = false;
+			clientAcceptorCV.notify_all();
+			throw;
+		}
 	}
 	
 	boost::optional<Master::PendingClient>
@@ -398,8 +418,14 @@ namespace mcore
 		clientAcceptor.cancel();
 
         // Wait until node/client acceptor is closed
-        nodeAcceptorMutex.lock();
-        clientAcceptorMutex.lock();
+		{
+			std::unique_lock<std::mutex> acceptorLock(nodeAcceptorMutex);
+			nodeAcceptorCV.wait(acceptorLock, [&]{ return !nodeAcceptorRunning; });
+		}
+		{
+			std::unique_lock<std::mutex> acceptorLock(clientAcceptorMutex);
+			clientAcceptorCV.wait(acceptorLock, [&]{ return !clientAcceptorRunning; });
+		}
 
 		// Delete node/client acceptor
         waitingNodeConnection->shutdown();
