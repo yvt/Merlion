@@ -39,8 +39,9 @@ namespace mcore
     public:
         using socketType = boost::asio::ip::tcp::socket;
         using sslSocketType = boost::asio::ssl::stream<socketType>;
-        using ioMutexType = std::recursive_mutex;
+		using strandType = boost::asio::strand;
 		using ptr = std::shared_ptr<MasterClient>;
+		using ioMutexType = std::recursive_mutex;
     private:
         friend class Master;
 		friend class MasterClientResponse;
@@ -54,6 +55,8 @@ namespace mcore
         boost::asio::io_service& service;
         bool accepted;
         volatile bool disposed;
+		
+		boost::asio::strand _strand;
 		
 		ioMutexType mutex;
 
@@ -71,7 +74,7 @@ namespace mcore
 		template <class Callback>
 		void respondStatus(ClientResponse resp, Callback callback);
 		
-		void connectionApproved(std::function<void(sslSocketType&, ioMutexType&)> onsuccess,
+		void connectionApproved(std::function<void(sslSocketType&, strandType&)> onsuccess,
 								std::function<void()> onfail,
 								const std::string& version);
 		void connectionRejected();
@@ -82,14 +85,14 @@ namespace mcore
         ~MasterClient();
         
         std::uint64_t id() const { return clientId; }
-        
+		
         socketType& tcpSocket() { return sslSocket.next_layer(); }
 		
 		const std::string& room() const { return _room; }
 		
 		bool doesAcceptVersion(const std::string&);
 		
-        void didAccept();
+        void handleNewClient();
         void shutdown();
 		
 		boost::signals2::signal<void(const std::shared_ptr<MasterClientResponse>&)> onNeedsResponse;
@@ -111,7 +114,7 @@ namespace mcore
 		
 		const MasterClient::ptr &client() const { return _client; }
 		
-		void accept(std::function<void(MasterClient::sslSocketType&, MasterClient::ioMutexType&)> onsuccess,
+		void accept(std::function<void(MasterClient::sslSocketType&, MasterClient::strandType&)> onsuccess,
 					std::function<void()> onfail,
 					const std::string& version);
 		void reject(const std::string& reason);

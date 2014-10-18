@@ -37,6 +37,7 @@ namespace mcore
 							   bool allowSpecifyVersion):
 	clientId(id),
 	service(master.library()->ioService()),
+	_strand(service),
 	sslContext(master.sslContext()),
 	sslSocket(service, sslContext),
 	disposed(false),
@@ -49,7 +50,7 @@ namespace mcore
     {
     }
 
-    void MasterClient::didAccept()
+    void MasterClient::handleNewClient()
     {
 		auto self = shared_from_this();
 		std::lock_guard<ioMutexType> lock(mutex);
@@ -58,18 +59,17 @@ namespace mcore
 		log.setChannel(str(format("Client:%d [%s]") % clientId % tcpSocket().remote_endpoint()));
 		BOOST_LOG_SEV(log, LogLevel::Debug) << "Client connected from " << tcpSocket().remote_endpoint();
 		
-        sslSocket.async_handshake(sslSocketType::server, 
-        [this, self](const boost::system::error_code& error) {
+        sslSocket.async_handshake(sslSocketType::server, _strand.wrap([this, self](const boost::system::error_code& error) {
             handshakeDone(error);
-        });
+        }));
         
         timeoutTimer.expires_from_now(boost::posix_time::seconds(5));
-        timeoutTimer.async_wait([this, self](const boost::system::error_code& error) {
+        timeoutTimer.async_wait(_strand.wrap([this, self](const boost::system::error_code& error) {
             if (error)
                 return;
 			BOOST_LOG_SEV(log, LogLevel::Debug) << "Timed out. Disconnecting.";
             shutdown();
-        });
+        }));
     }
     
     void MasterClient::handshakeDone(const boost::system::error_code &error)
@@ -87,8 +87,7 @@ namespace mcore
         
         // Read prologue
         auto buf = std::make_shared<std::array<char, 2048>>();
-        asio::async_read(sslSocket, asio::buffer(buf->data(), buf->size()),
-        [this, buf, self](const boost::system::error_code& error, std::size_t readCount) {
+        asio::async_read(sslSocket, asio::buffer(buf->data(), buf->size()), _strand.wrap([this, buf, self](const boost::system::error_code& error, std::size_t readCount) {
 			
 			auto self = shared_from_this();
 			std::lock_guard<std::recursive_mutex> lock(mutex);
@@ -155,7 +154,7 @@ namespace mcore
 								  shutdown();
 							  });
 			}
-        });
+        }));
     }
 	
 	void MasterClient::connectionRejected()
@@ -171,7 +170,7 @@ namespace mcore
 					  });
 	}
 	
-	void MasterClient::connectionApproved(std::function<void(sslSocketType&, ioMutexType&)> onsuccess,
+	void MasterClient::connectionApproved(std::function<void(sslSocketType&, strandType&)> onsuccess,
 										  std::function<void()> onfail,
 										  const std::string& version)
 	{
@@ -188,17 +187,16 @@ namespace mcore
 		
 		BOOST_LOG_SEV(log, LogLevel::Info) << "Connection approved.";
 		
-		respondStatus(ClientResponse::Success,
-		  [this, self, onsuccess, onfail](const boost::system::error_code &error) {
-			  if (error) {
-				  BOOST_LOG_SEV(log, LogLevel::Info) << "Failed to send 'Success' response. Disconnecting.";
-				  onfail();
-				  shutdown();
-			  } else {
-				  onsuccess(sslSocket, mutex);
-				  timeoutTimer.cancel();
-			  }
-		  });
+		respondStatus(ClientResponse::Success, [this, self, onsuccess, onfail](const boost::system::error_code &error) {
+			if (error) {
+				BOOST_LOG_SEV(log, LogLevel::Info) << "Failed to send 'Success' response. Disconnecting.";
+				onfail();
+				shutdown();
+			} else {
+				onsuccess(sslSocket, _strand);
+				timeoutTimer.cancel();
+			}
+		});
 	}
 	
 	template <class Callback>
@@ -209,9 +207,9 @@ namespace mcore
 		
 		auto buf = std::make_shared<ClientResponse>(resp);
 		asio::async_write(sslSocket, asio::buffer(buf.get(), sizeof(ClientResponse)),
-		[this, buf, self, callback](const boost::system::error_code& error, std::size_t) {
+		_strand.wrap([this, buf, self, callback](const boost::system::error_code& error, std::size_t) {
 			callback(error);
-		});
+		}));
 	}
 	
 	bool MasterClient::doesAcceptVersion(const std::string &ver)
@@ -224,22 +222,24 @@ namespace mcore
     void MasterClient::shutdown()
 	{
 		auto self = shared_from_this();
-		std::lock_guard<ioMutexType> lock(mutex);
-		
-        if (disposed)
-            return;
-        disposed = true;
-		
-		BOOST_LOG_SEV(log, LogLevel::Debug) << "Shutting down.";
-		
-		onShutdown();
-		
-		try { sslSocket.shutdown(); } catch (...) { }
-		try { tcpSocket().shutdown(socketType::shutdown_both); } catch (...) { }
-		try { tcpSocket().close(); } catch (...) { }
-		assert(!tcpSocket().is_open());
-		
-		timeoutTimer.cancel();
+		_strand.dispatch([self, this] {
+			std::lock_guard<ioMutexType> lock(mutex);
+			
+			if (disposed)
+				return;
+			disposed = true;
+			
+			BOOST_LOG_SEV(log, LogLevel::Debug) << "Shutting down.";
+			
+			onShutdown();
+			
+			try { sslSocket.shutdown(); } catch (...) { }
+			try { tcpSocket().shutdown(socketType::shutdown_both); } catch (...) { }
+			try { tcpSocket().close(); } catch (...) { }
+			assert(!tcpSocket().is_open());
+			
+			timeoutTimer.cancel();
+		});
     }
 	
 	MasterClientResponse::MasterClientResponse(const MasterClient::ptr &client):
@@ -252,7 +252,7 @@ namespace mcore
 		reject("No one responded to MasterClientResponse.");
 	}
 	
-	void MasterClientResponse::accept(std::function<void (MasterClient::sslSocketType &, MasterClient::ioMutexType&)> onsuccess,
+	void MasterClientResponse::accept(std::function<void (MasterClient::sslSocketType &, MasterClient::strandType&)> onsuccess,
 									  std::function<void ()> onfail,
 									  const std::string& version)
 	{
@@ -261,7 +261,11 @@ namespace mcore
 			onfail();
 			return;
 		}
-		_client->connectionApproved(onsuccess, onfail, version);
+		
+		auto cli = _client;
+		cli->_strand.dispatch([cli, onsuccess, onfail, version] {
+			cli->connectionApproved(onsuccess, onfail, version);
+		});
 		
 		onResponded(true);
 	}
@@ -275,7 +279,11 @@ namespace mcore
 		
 		BOOST_LOG_SEV(_client->log, LogLevel::Warn) <<
 		reason;
-		_client->connectionRejected();
+		
+		auto cli = _client;
+		cli->_strand.dispatch([cli] {
+			cli->connectionRejected();
+		});
 		
 		onResponded(false);
 	}

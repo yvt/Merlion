@@ -98,15 +98,11 @@ namespace mcore
 			client = req->response->client();
 			
 			auto c = connection;
+			auto cli = client;
 			
 			req->response->accept
-			([this, self, c](ssl::stream<ip::tcp::socket>& stream, std::recursive_mutex& ioMutex) {
-				
-				auto syncStream = std::make_shared
-				<synchornized_stream<ssl::stream<ip::tcp::socket>, std::recursive_mutex>>
-				(stream, ioMutex);
-				
-				startAsyncPipe(*syncStream, *connection, 4096, [this, self, c, syncStream](const boost::system::error_code &error, std::uint64_t) {
+			([this, self, c, cli](ssl::stream<ip::tcp::socket>& stream, boost::asio::strand& strand) {
+				startAsyncPipe(stream, *connection, 4096, strand.wrap([this, self, c, cli](const boost::system::error_code &error, std::uint64_t) {
 					if (error) {
 						BOOST_LOG_SEV(log, LogLevel::Debug) <<
 						"Downstream error.: " << error;
@@ -115,8 +111,8 @@ namespace mcore
 						"End of downstream.";
 				   }
 				   shutdown();
-			   });
-				startAsyncPipe(*connection, *syncStream, 4096, [this, self, c, syncStream](const boost::system::error_code &error, std::uint64_t) {
+			    }));
+				startAsyncPipe(*connection, stream, 4096, strand.wrap([this, self, c, cli](const boost::system::error_code &error, std::uint64_t) {
 					if (error) {
 						BOOST_LOG_SEV(log, LogLevel::Debug) <<
 						"Upstream error.: " << error;
@@ -125,7 +121,7 @@ namespace mcore
 						"End of upstream.";
 					}
 				   shutdown();
-			   });
+			    }));
 			},
 			[this, self]() {
 				shutdown();

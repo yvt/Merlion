@@ -23,62 +23,115 @@
 namespace mcore
 {
     namespace asio = boost::asio;
-    
+	
+	namespace detail
+	{
+		template <class InStream, class OutStream, class Callback>
+		struct AsyncPipeState: public std::enable_shared_from_this<AsyncPipeState<InStream, OutStream, Callback>>
+		{
+			using State = AsyncPipeState;
+			std::vector<char> buffer;
+			InStream& inStream;
+			OutStream& outStream;
+			Callback callback;
+			std::uint64_t count = 0;
+			
+			AsyncPipeState(InStream& inStream, OutStream& outStream, std::size_t bufferSize, const Callback& callback):
+			inStream(inStream),
+			outStream(outStream),
+			callback(callback)
+			{
+				buffer.resize(bufferSize);
+			}
+			~AsyncPipeState() = default;
+			
+			void run()
+			{
+				inStream.async_read_some(asio::buffer(buffer.data(), buffer.size()),
+										 ReadOperation(this->shared_from_this()));
+			}
+			
+			struct Operation
+			{
+				static constexpr bool IsAsyncPipeStateOperation = true;
+				std::shared_ptr<State> state;
+				Operation(const std::shared_ptr<State>& state):
+				state(state) {}
+			};
+			
+			struct ReadOperation: public Operation
+			{
+				ReadOperation(const std::shared_ptr<State>& state):
+				Operation(state) {}
+				
+				void operator ()
+				(const boost::system::error_code& error, std::size_t count) const
+				{
+					auto& s = *this->state;
+					
+					if (error) {
+						s.callback(error, s.count);
+						return;
+					} else if (count == 0) {
+						s.callback(boost::system::error_code(), s.count);
+						return;
+					}
+					s.count += count;
+					
+					async_write(s.outStream, asio::buffer(s.buffer.data(), count), WriteOperation(this->state));
+				}
+			};
+			
+			struct WriteOperation: public Operation
+			{
+				WriteOperation(const std::shared_ptr<State>& state):
+				Operation(state) {}
+				
+				void operator ()
+				(const boost::system::error_code& error, std::size_t count) const
+				{
+					auto& s = *this->state;
+					
+					if (error) {
+						s.callback(error, s.count);
+						return;
+					}
+					
+					s.run();
+				}
+			};
+			
+		};
+		
+		/* won't work for some reason...
+		template <typename Function, class InStream, class OutStream, class Callback>
+		inline void asio_handler_invoke
+		(Function function,
+		 typename AsyncPipeState<InStream, OutStream, Callback>::Operation *thisHandler)
+		{
+			boost_asio_handler_invoke_helpers::invoke
+			(function, thisHandler->state->callback);
+		}
+		*/
+		
+		template <typename Function, typename Operation>
+		inline typename
+		std::enable_if<Operation::IsAsyncPipeStateOperation>::type
+		asio_handler_invoke
+		(Function function, Operation *thisHandler)
+		{
+			boost_asio_handler_invoke_helpers::invoke
+			(function, thisHandler->state->callback);
+		}
+		
+	}
+	
     template <class InStream, class OutStream, class Callback>
     void startAsyncPipe(InStream& inStream, OutStream& outStream, std::size_t bufferSize, const Callback& callback)
     {
-        struct State
-        {
-            std::vector<char> buffer;
-            InStream& inStream;
-            OutStream& outStream;
-            Callback callback;
-            std::uint64_t count = 0;
-			std::function<void(const std::shared_ptr<State>&)> run;
-			
-            State(InStream& inStream, OutStream& outStream, std::size_t bufferSize, const Callback& callback):
-                inStream(inStream),
-                outStream(outStream),
-                callback(callback)
-            {
-                buffer.resize(bufferSize);
-            }
-			~State()
-			{
-				
-			}
-        };
+		using State = detail::AsyncPipeState<InStream, OutStream, Callback>;
+		
         auto state = std::make_shared<State>(inStream, outStream, bufferSize, callback);
-		state->run = [](const std::shared_ptr<State>& state)
-        {
-            auto& s = *state;
-            s.inStream.async_read_some(asio::buffer(s.buffer.data(), s.buffer.size()),
-            [state](const boost::system::error_code& error, std::size_t readCount) {
-                auto& s = *state;
-                
-                if (error) {
-                    s.callback(error, s.count);
-                    return;
-                } else if (readCount == 0) {
-                    s.callback(boost::system::error_code(), s.count);
-                    return;
-                }
-                s.count += readCount;
-                
-                async_write(s.outStream, asio::buffer(s.buffer.data(), readCount),
-                [state](const boost::system::error_code& error, std::size_t readCount) {
-                    auto& s = *state;
-                    
-                    if (error) {
-                        s.callback(error, s.count);
-                        return;
-                    }
-                    
-                    s.run(state);
-                });
-            });
-        };
-        state->run(state);
+        state->run();
     }
 }
-

@@ -345,7 +345,7 @@ namespace mcore
 					});
 					
 					// Start service
-					conn->didAccept();
+					conn->handleNewClient();
 				}
 
 				// Accept next connection
