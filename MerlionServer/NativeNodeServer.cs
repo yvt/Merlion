@@ -152,6 +152,9 @@ namespace Merlion.Server
 			try {
 				disposeLock.EnterReadLock();
 				native.VersionLoaded (name);
+			} catch(InvalidOperationException ex) {
+				// don't care...
+				log.Debug ("SendVersionLoaded was called but state was invalid.");
 			} finally {
 				disposeLock.ExitReadLock ();
 			}
@@ -162,6 +165,9 @@ namespace Merlion.Server
 			try {
 				disposeLock.EnterReadLock();
 				native.VersionUnloaded (name);
+			} catch(InvalidOperationException) {
+				// don't care...
+				log.Debug ("SendVersionUnloaded was called but state was invalid.");
 			} finally {
 				disposeLock.ExitReadLock ();
 			}

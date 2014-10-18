@@ -24,6 +24,7 @@
 #include "NodeDomain.hpp"
 #include "NodeVersionLoader.hpp"
 #include "Version.h"
+#include "Library.hpp"
 
 namespace asio = boost::asio;
 using boost::format;
@@ -157,9 +158,7 @@ namespace mcore
 	timeoutTimer(library->ioService()),
 	reconnectTimer(library->ioService()),
 	endpoint(parseTcpEndpoint(parameters.masterEndpoint)),
-	down(true),
-	beingDisposed(false),
-	started(false),
+	state(State::NotStarted),
 	startTime(boost::posix_time::second_clock::universal_time())
 	{
 		BOOST_LOG_SEV(log, LogLevel::Info) << "Starting as '" << parameters.nodeName << "'.";
@@ -226,48 +225,16 @@ namespace mcore
 	void Node::start()
 	{
 		auto self = shared_from_this();
-		if (started.exchange(true)) {
+		if (state != State::NotStarted) {
 			MSCThrow(InvalidOperationException("mcore::Node::start was called twice."));
 		}
-		
+		state = State::Connecting;
 		
 		std::lock_guard<std::recursive_mutex> lock(socketMutex);
-		asyncDoneMutex.lock();
 		connectAsync();
 		
 		BOOST_LOG_SEV(log, LogLevel::Info) <<
 		format("Merlion Node Server Core (%s) running.") % MSC_VERSION_STRING;
-	}
-	
-	void Node::onBeingDestroyed(Library &)
-	{
-		invalidate();
-	}
-	
-	void Node::invalidate()
-	{
-		if (_library == nullptr) {
-			return;
-		}
-		
-		beingDisposed = true;
-		
-		versionLoader->shutdown();
-		versionLoader.reset();
-		
-		{
-			std::lock_guard<std::recursive_mutex> lock(socketMutex);
-			shutdown();
-			
-			timeoutTimer.cancel();
-			reconnectTimer.cancel();
-		}
-		
-		// Wait until all async operations are done
-		asyncDoneMutex.lock();
-		
-		_library = nullptr;
-		
 	}
 	
 	void Node::checkValid() const
@@ -296,7 +263,12 @@ namespace mcore
 	void Node::nodeFailure()
 	{
 		auto self = shared_from_this();
-		std::lock_guard<std::recursive_mutex> lock(socketMutex);
+		
+		// Shutdown the node.
+		// If the node was shut down before not because of failure,
+		// we should not report the failure.
+		if (!shutdown())
+			return;
 		BOOST_LOG_SEV(log, LogLevel::Warn) << "Reporting node failure.";
 		
 		shutdown();
@@ -304,28 +276,46 @@ namespace mcore
 		_parameters.failureFunction();
 	}
 	
-	void Node::shutdown()
+	bool Node::shutdown()
 	{
+		auto self = shared_from_this();
 		
 		std::lock_guard<std::recursive_mutex> lock(socketMutex);
-		if (down) {
-			BOOST_LOG_SEV(log, LogLevel::Debug) << "Tried to shut down, but node is already down.";
-			return;
+		
+		auto lastState = state;
+		if (state == State::Disconnected) {
+			// Shutdown is already initiated.
+			BOOST_LOG_SEV(log, LogLevel::Debug) << "Tried to shut down, but shutdown is already initiated.";
+			return false;
 		}
+		state = State::Disconnected;
 		
 		BOOST_LOG_SEV(log, LogLevel::Info) << "Shutting down.";
-		down = true;
-		try { socket.close(); } catch (...) { }
 		
-		// Unload domains
-		BOOST_LOG_SEV(log, LogLevel::Info) << "Unloading domains.";
-		for (const auto& ver: domains) {
-			BOOST_LOG_SEV(log, LogLevel::Debug) <<
-			format("Unloading '%s'.") % ver.first;
-			_parameters.unloadVersionFunction(ver.first);
+		if (lastState != State::NotStarted) {
+			// Tear down the socket first.
+			// We don't want to send anything while cleaning up.
+			try { socket.close(); } catch (...) { }
+			
+			// Unload domains.
+			BOOST_LOG_SEV(log, LogLevel::Info) << "Unloading domains.";
+			for (const auto& ver: domains) {
+				BOOST_LOG_SEV(log, LogLevel::Debug) <<
+				format("Unloading '%s'.") % ver.first;
+				_parameters.unloadVersionFunction(ver.first);
+			}
+			domains.clear();
+		} else {
+			BOOST_LOG_SEV(log, LogLevel::Debug) << "State was 'not started'.";
 		}
-		domains.clear();
 		
+		versionLoader->shutdown();
+		versionLoader.reset();
+		
+		timeoutTimer.cancel();
+		reconnectTimer.cancel();
+		
+		return true;
 	}
 	
 	void Node::connectAsync()
@@ -333,6 +323,11 @@ namespace mcore
 		BOOST_LOG_SEV(log, LogLevel::Info) << "Connecting to " << endpoint << ".";
 		
 		std::lock_guard<std::recursive_mutex> lock(socketMutex);
+		
+		if (state != State::Connecting) {
+			BOOST_LOG_SEV(log, LogLevel::Debug) << "Aborting due to an invalid state.";
+			return;
+		}
 		
 		try {
 			socket.async_connect(endpoint, [this](const boost::system::error_code& error) {
@@ -349,14 +344,12 @@ namespace mcore
 				} catch (...) {
 					BOOST_LOG_SEV(log, LogLevel::Error) << "Failed to connect.: " <<
 					boost::current_exception_diagnostic_information();
-					try { socket.close(); } catch (...) { }
 					nodeFailure();
 				}
 			});
 		} catch (...) {
 			BOOST_LOG_SEV(log, LogLevel::Error) << "Failed to connect.: " <<
 			boost::current_exception_diagnostic_information();
-			try { socket.close(); } catch (...) { }
 			nodeFailure();
 		}
 	}
@@ -385,10 +378,20 @@ namespace mcore
 		
 		std::lock_guard<std::recursive_mutex> lock(socketMutex);
 		
+		if (state != State::Connecting) {
+			BOOST_LOG_SEV(log, LogLevel::Debug) << "Aborting due to an invalid state.";
+			return;
+		}
+		
 		asio::async_write(socket, buffers, [this, buf1, buf2](const boost::system::error_code& err, std::size_t)
 		{
 			auto self = shared_from_this();
 			std::lock_guard<std::recursive_mutex> lock(socketMutex);
+			
+			if (state != State::Connecting) {
+				BOOST_LOG_SEV(log, LogLevel::Debug) << "Aborting due to an invalid state.";
+				return;
+			}
 			
 			try {
 				if (err) {
@@ -397,7 +400,8 @@ namespace mcore
 				
 				BOOST_LOG_SEV(log, LogLevel::Info) << "NodeInfo sent. Started listening for events...";
 				
-				down = false;
+				state = State::Servicing;
+				
 				timeoutTimer.cancel();
 				receiveCommandHeader();
 			} catch (...) {
@@ -414,10 +418,20 @@ namespace mcore
 		
 		std::lock_guard<std::recursive_mutex> lock(socketMutex);
 		
+		if (state != State::Servicing) {
+			BOOST_LOG_SEV(log, LogLevel::Debug) << "Aborting due to an invalid state.";
+			return;
+		}
+		
 		asio::async_read(socket, asio::buffer(buf.get(), 4), [this, buf](const boost::system::error_code& err, std::size_t) {
 			auto self = shared_from_this();
 			std::lock_guard<std::recursive_mutex> lock(socketMutex);
-				
+			
+			if (state != State::Servicing) {
+				BOOST_LOG_SEV(log, LogLevel::Debug) << "Aborting due to an invalid state.";
+				return;
+			}
+			
 			try {
 				if (err) {
 					MSCThrow(boost::system::system_error(err));
@@ -442,10 +456,21 @@ namespace mcore
 		buf->resize(size);
 		
 		std::lock_guard<std::recursive_mutex> lock(socketMutex);
-	
+		
+		if (state != State::Servicing) {
+			BOOST_LOG_SEV(log, LogLevel::Debug) << "Aborting due to an invalid state.";
+			return;
+		}
+		
 		asio::async_read(socket, asio::buffer(*buf), [this, buf](const boost::system::error_code& err, std::size_t) {
 			auto self = shared_from_this();
 			std::lock_guard<std::recursive_mutex> lock(socketMutex);
+			
+			if (state != State::Servicing) {
+				BOOST_LOG_SEV(log, LogLevel::Debug) << "Aborting due to an invalid state.";
+				return;
+			}
+			
 			try {
 				if (err) {
 					MSCThrow(boost::system::system_error(err));
@@ -553,7 +578,7 @@ namespace mcore
 		auto buf = std::make_shared<std::vector<char>>(std::move(gen.vector()));
 		std::lock_guard<std::recursive_mutex> lock(socketMutex);
 		
-		if (down) {
+		if (state != State::Servicing) {
 			if (unreliable)
 				return;
 			BOOST_LOG_SEV(log, LogLevel::Error) << "Failed to send " << name << " because not connected to master.";
@@ -634,32 +659,32 @@ namespace mcore
 	{
 		auto self = shared_from_this();
 		std::lock_guard<std::recursive_mutex> lock(socketMutex);
-		if (down)
-			return;
+		if (state != State::Servicing)
+			MSCThrow(InvalidOperationException());
 		sendVersionLoaded(v);
 	}
 	void Node::versionUnloaded(const std::string &v)
 	{
 		auto self = shared_from_this();
 		std::lock_guard<std::recursive_mutex> lock(socketMutex);
-		if (down)
-			return;
+		if (state != State::Servicing)
+			MSCThrow(InvalidOperationException());
 		sendVersionUnloaded(v);
 	}
 	void Node::bindRoom(const std::string &room, const std::string &version)
 	{
 		auto self = shared_from_this();
 		std::lock_guard<std::recursive_mutex> lock(socketMutex);
-		if (down)
-			return;
+		if (state != State::Servicing)
+			MSCThrow(InvalidOperationException());
 		sendBindRoom(room, version);
 	}
 	void Node::unbindRoom(const std::string &room)
 	{
 		auto self = shared_from_this();
 		std::lock_guard<std::recursive_mutex> lock(socketMutex);
-		if (down)
-			return;
+		if (state != State::Servicing)
+			MSCThrow(InvalidOperationException());
 		sendUnbindRoom(room);
 	}
 	
@@ -680,7 +705,6 @@ namespace mcore
 	
 	Node::~Node()
 	{
-		invalidate();
 	}
 	
 }
@@ -714,7 +738,7 @@ extern "C" MSCResult MSCNodeDestroy(MSCNode node)
 		if (!node)
 			MSCThrow(mcore::InvalidArgumentException("node"));
 		auto *h = mcore::Node::fromHandle(node);
-		(*h)->invalidate();
+		(*h)->shutdown();
 		delete h;
 	});
 }

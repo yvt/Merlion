@@ -15,7 +15,6 @@
  */
 
 #pragma once
-#include "Library.hpp"
 #include "Public.h"
 #include "Logging.hpp"
 #include "Protocol.hpp"
@@ -46,15 +45,33 @@ namespace mcore
 		NodeParameters(MSCNodeParameters const &param);
 	};
 	
+	class Library;
 	class NodeDomain;
 	class NodeClient;
 	class NodeVersionLoader;
 	
-	class Node: boost::noncopyable, LibraryListener,
+	class Node: boost::noncopyable,
 	public std::enable_shared_from_this<Node>
 	{
 		std::shared_ptr<Library> _library;
 		TypedLogger<Node> log;
+		
+		enum class State
+		{
+			// `start()` is not called.
+			NotStarted,
+			
+			// Connection to the master server is not established, or
+			// handshake procedure is not completed.
+			Connecting,
+			
+			// Server is running normally.
+			Servicing,
+			
+			// Server was disconnected by `shutdown()` or
+			// any failures (`nodeFailure()`).
+			Disconnected
+		};
 		
 		NodeParameters const _parameters;
 		NodeInfo info;
@@ -63,11 +80,7 @@ namespace mcore
 		boost::asio::ip::tcp::endpoint endpoint;
 		boost::asio::ip::tcp::socket socket;
 		std::recursive_mutex socketMutex;
-		volatile bool down;
-		volatile bool beingDisposed;
-		std::atomic<bool> started;
-		
-		std::mutex asyncDoneMutex;
+		State state;
 		
 		std::unordered_set<std::string> versionsToLoad;
 		std::shared_ptr<NodeVersionLoader> versionLoader;
@@ -77,11 +90,9 @@ namespace mcore
 		
 		std::unordered_map<std::string, std::shared_ptr<NodeDomain>> domains;
 		
-		void onBeingDestroyed(Library&) override;
 		void checkValid() const;
 		
 		void setTimeout();
-		void shutdown();
 		void nodeFailure();
 		
 		void connectAsync();
@@ -104,7 +115,8 @@ namespace mcore
 		~Node();
 		
 		void start();
-		void invalidate();
+		bool shutdown();
+		bool isDisposed() const { return state == State::Disconnected; }
 		
 		const std::shared_ptr<Library>& library() const { return _library; }
 		const NodeParameters& parameters() const { return _parameters; }
