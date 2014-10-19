@@ -5,7 +5,6 @@ using System.Runtime.CompilerServices;
 // Change them to the values specific to your project.
 
 [assembly: AssemblyTitle ("MerCat")]
-[assembly: AssemblyDescription ("")]
 #if DEBUG
 [assembly: AssemblyConfiguration("Debug")]
 #else
@@ -13,6 +12,7 @@ using System.Runtime.CompilerServices;
 #endif
 [assembly: AssemblyCompany ("yvt")]
 [assembly: AssemblyProduct ("Merlion")]
+[assembly: AssemblyDescription ("Tools for testing Merlion-based server.")]
 [assembly: AssemblyCopyright ("Copyright © 2014 yvt <i@yvt.jp>. Apache License 2.0 applies.")]
 [assembly: AssemblyTrademark ("Merlion™")]
 

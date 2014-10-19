@@ -203,7 +203,7 @@ namespace Merlion.MerCat
 			}
 
 			if (Mode == null) {
-				Console.Error.WriteLine ("Only one of -NetCat and -Stress must be specified.");
+				Console.Error.WriteLine ("One of -NetCat and -Stress must be specified.");
 				Environment.Exit (1);
 			}
 			if (Address == null) {
@@ -220,7 +220,7 @@ namespace Merlion.MerCat
 			Environment.Exit (1);
 		}
 
-		[Description("MetCat behaves like NetCat.")]
+		[Description("MetCat behaves like NetCat by connecting the standard input/output to the socket stream.")]
 		void HandleNetCat()
 		{
 			Mode = RunMode.NetCat;

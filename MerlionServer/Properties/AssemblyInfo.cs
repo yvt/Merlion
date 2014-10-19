@@ -21,7 +21,6 @@ using System.Runtime.CompilerServices;
 // Change them to the values specific to your project.
 
 [assembly: AssemblyTitle ("MerlionServer")]
-[assembly: AssemblyDescription ("")]
 #if DEBUG
 [assembly: AssemblyConfiguration("Debug")]
 #else
@@ -29,6 +28,7 @@ using System.Runtime.CompilerServices;
 #endif
 [assembly: AssemblyCompany ("yvt")]
 [assembly: AssemblyProduct ("Merlion")]
+[assembly: AssemblyDescription ("Full featured Merlion server. Run as a node or both of master and node.")]
 [assembly: AssemblyCopyright ("Copyright © 2014 yvt <i@yvt.jp>. Apache License 2.0 applies.")]
 [assembly: AssemblyTrademark ("Merlion™")]
 
