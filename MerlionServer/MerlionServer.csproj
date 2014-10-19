@@ -17,9 +17,9 @@
     <DefineConstants>DEBUG;</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-    <ConsolePause>false</ConsolePause>
-    <Commandlineparameters>-n -ma 127.0.0.1:5000</Commandlineparameters>
+    <Commandlineparameters>-m -ma 127.0.0.1:5000</Commandlineparameters>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ConsolePause>false</ConsolePause>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>full</DebugType>

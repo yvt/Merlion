@@ -33,7 +33,7 @@ namespace Merlion.Server
 		readonly NativeNodeServerManager localNodeServer;
 
 		readonly System.Threading.Thread saveBalancerConfigThread;
-		volatile bool stopRequested = false;
+		readonly System.Threading.ManualResetEvent stopEvent = new System.Threading.ManualResetEvent(false);
 
 		static NativeServerInterop.MasterParameters CreateParameters()
 		{
@@ -94,11 +94,10 @@ namespace Merlion.Server
 
 			saveBalancerConfigThread = new System.Threading.Thread (() => {
 				// "Save balancer config" thread
-				while (!stopRequested) {
+				while (!stopEvent.WaitOne(500)) {
 					if (balancer.IsModified) {
 						balancer.SaveConfig ();
 					}
-					System.Threading.Thread.Sleep (500);
 				}
 			});
 			saveBalancerConfigThread.Start ();
@@ -106,7 +105,7 @@ namespace Merlion.Server
 
 		public void Dispose()
 		{
-			stopRequested = true;
+			stopEvent.Set ();
 			saveBalancerConfigThread.Join ();
 
 			localNodeServer.Dispose ();

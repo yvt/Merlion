@@ -19,11 +19,14 @@ using System.ComponentModel;
 using System.Threading;
 using log4net.Layout;
 using log4net.Appender;
+using log4net;
 
 namespace Merlion.Server
 {
 	class MainClass
 	{
+		readonly static ILog log = LogManager.GetLogger(typeof(MainClass));
+
 		static CommandLineArguments Arguments;
 
 		public static IMasterServer MasterServer;
@@ -46,7 +49,7 @@ namespace Merlion.Server
 			log4net.GlobalContext.Properties["Node"] = "Local";
 			if (!logInfo.Exists)
 			{
-				log4net.LogManager.GetLogger (typeof(MainClass)).WarnFormat (
+				log.WarnFormat (
 					"Log configuration file '{0}' was not found. Creating default one.", 
 					logInfo.FullName);
 				try {
@@ -56,7 +59,7 @@ namespace Merlion.Server
 						Utils.StreamUtils.Copy (s2, s);
 					}
 				} catch (Exception ex) {
-					log4net.LogManager.GetLogger (typeof(MainClass)).Error (
+					log.Error (
 						"Error while creating the default log configuration file.", ex);
 				}
 			}
@@ -64,20 +67,20 @@ namespace Merlion.Server
 			logInfo = new System.IO.FileInfo (logConfig);
 			if (logInfo.Exists) {
 				log4net.Config.XmlConfigurator.ConfigureAndWatch (logInfo);
-				log4net.LogManager.GetLogger (typeof(MainClass)).InfoFormat (
+				log.InfoFormat (
 					"Using log configuration file '{0}'.", 
 					logInfo.FullName);
 			} else {
 				log4net.Config.BasicConfigurator.Configure();
 
-				log4net.LogManager.GetLogger (typeof(MainClass)).WarnFormat (
+				log.WarnFormat (
 					"Log configuration file '{0}' was not found. Using BasicConfigurator.", 
 					logInfo.FullName);
 			}
 
 			NativeServerInterop.Logging.RegisterLogger ();
 
-			log4net.LogManager.GetLogger (typeof(MainClass)).InfoFormat (
+			log.InfoFormat (
 				"Base directory is '{0}'.", 
 				AppConfiguration.BaseDirectory);
 
@@ -98,7 +101,7 @@ namespace Merlion.Server
 							var web = new Web.WebInterface (MasterServer);
 							web.Run ();
 						} catch (Exception ex) {
-							log4net.LogManager.GetLogger(typeof(MainClass)).Fatal(
+							log.Fatal(
 								"Error occured in web server.", ex
 							);
 							Environment.Exit(1);
@@ -106,11 +109,18 @@ namespace Merlion.Server
 					});
 					webThread.Name = "Web Interface";
 					webThread.Start();
-
-					webThread.Join();
-					//MasterServer.Run();
+					if (Arguments.ExitByEnter) {
+						Console.In.ReadLine ();
+						webThread.Abort();
+					} else {
+						webThread.Join();
+					}
+					log.Info(
+						"Exiting by user operation."
+					);
+					MasterServer.Dispose();
 				} catch (Exception ex) {
-					log4net.LogManager.GetLogger(typeof(MainClass)).Fatal(
+					log.Fatal(
 						"Error occured in master server.", ex
 					);
 					Environment.Exit(1);
@@ -118,10 +128,21 @@ namespace Merlion.Server
 
 			} else {
 				NodeServerManager = new NativeNodeServerManager (Arguments.NodeName, Arguments.MasterServerEndpoint);
-				while (true) Thread.Sleep (1000);
-				//NodeServer.Run ();
+				if (Arguments.ExitByEnter) {
+					Console.In.ReadLine ();
+				} else {
+					while (true)
+						Thread.Sleep (1000);
+				}
+				log.Info(
+					"Exiting by user operation."
+				);
+				NodeServerManager.Dispose ();
 			}
 
+			NativeServerInterop.Library.Instance.Dispose ();
+
+			Environment.Exit(0);
 		}
 	}
 
@@ -135,6 +156,8 @@ namespace Merlion.Server
 	{
 		bool runAsMaster = false;
 		bool runAsNode = false;
+
+		public bool ExitByEnter = false;
 
 		System.Net.IPEndPoint masterServerEndpoint = AppConfiguration.MasterServerAddress;
 
@@ -202,6 +225,13 @@ namespace Merlion.Server
 		void HandleNodeName(string name)
 		{
 			NodeName = name;
+		}
+
+		[Description("Server can be terminated gracefully by hitting the enter key. Useful for " +
+			"CPU profiling using mono.")]
+		void HandleExitByEnter()
+		{
+			ExitByEnter = true;
 		}
 
 		[Description("Shows the usage.")]
