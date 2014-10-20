@@ -27,10 +27,11 @@ namespace mcore
 	public MasterNodeConnectionHandler,
 	public std::enable_shared_from_this<MasterNodeClientStream>
 	{
+		class ClientHandler;
 		TypedLogger<MasterNodeClientStream> log;
 		
+		std::weak_ptr<MasterClient> client;
 		std::shared_ptr<MasterNodeConnection> connection;
-		std::shared_ptr<MasterClient> client;
 		
 		void shutdown();
 	public:

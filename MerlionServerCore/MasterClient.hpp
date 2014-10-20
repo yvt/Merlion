@@ -23,6 +23,8 @@
 #include "Logging.hpp"
 #include <atomic>
 #include "Utils.hpp"
+#include "Exceptions.hpp"
+#include "AsyncPipe.hpp"
 
 namespace mcore
 {
@@ -31,6 +33,7 @@ namespace mcore
 	class MasterNode;
 	class MasterClientResponse;
 	class LikeMatcher;
+	class BaseMasterClientHandler;
 	
     class MasterClient :
 	public std::enable_shared_from_this<MasterClient>,
@@ -45,6 +48,8 @@ namespace mcore
     private:
         friend class Master;
 		friend class MasterClientResponse;
+		template <class T>
+		friend class MasterClientHandler;
 		
 		TypedLogger<MasterClient> log;
 		
@@ -62,6 +67,8 @@ namespace mcore
 
         boost::asio::ssl::context& sslContext;
         sslSocketType sslSocket;
+		
+		std::shared_ptr<BaseMasterClientHandler> handler;
         
         boost::asio::deadline_timer timeoutTimer;
 		
@@ -74,10 +81,11 @@ namespace mcore
 		template <class Callback>
 		void respondStatus(ClientResponse resp, Callback callback);
 		
-		void connectionApproved(std::function<void(sslSocketType&, strandType&)> onsuccess,
+		void connectionApproved(std::function<std::shared_ptr<BaseMasterClientHandler>()> onsuccess,
 								std::function<void()> onfail,
 								const std::string& version);
 		void connectionRejected();
+		
 		
     public:
         MasterClient(Master& master, std::uint64_t id,
@@ -114,7 +122,7 @@ namespace mcore
 		
 		const MasterClient::ptr &client() const { return _client; }
 		
-		void accept(std::function<void(MasterClient::sslSocketType&, MasterClient::strandType&)> onsuccess,
+		void accept(std::function<std::shared_ptr<BaseMasterClientHandler>()> onsuccess,
 					std::function<void()> onfail,
 					const std::string& version);
 		void reject(const std::string& reason);
@@ -122,6 +130,117 @@ namespace mcore
 		bool isResponded();
 		
 		boost::signals2::signal<void(bool)> onResponded;
+	};
+	
+	class BaseMasterClientHandler :
+	boost::noncopyable
+	{
+		friend class MasterClient;
+		template <class T>
+		friend class MasterClientHandler;
+		virtual void handleClient(std::shared_ptr<MasterClient>) = 0;
+		virtual void shutdown() = 0;
+	};
+	
+	/** For an implementation of T, see
+	 * <MasterNodeClientStream::ClientHandler>. */
+	template <class T>
+	class MasterClientHandler :
+	boost::noncopyable,
+	public std::enable_shared_from_this<MasterClientHandler<T>>,
+	public BaseMasterClientHandler
+	{
+		T baseHandler;
+		std::atomic<bool> handled;
+		std::shared_ptr<MasterClient> client;
+		
+		struct ClientInputOutput
+		{
+			std::shared_ptr<MasterClient> client;
+			
+			ClientInputOutput(const std::shared_ptr<MasterClient>& client):
+			client(client)
+			{ }
+			
+			template <class Buffer, class Callback>
+			void async_read_some(Buffer&& buffer,
+								 Callback&& callback)
+			{
+				auto& strand = client->_strand;
+				auto client = this->client;
+				strand.dispatch([buffer, callback, client, this] {
+					auto& strand = client->_strand;
+					auto& sslSocket = client->sslSocket;
+					sslSocket.async_read_some
+					(std::move(buffer),
+					 strand.wrap(std::move(callback)));
+				});
+			}
+			template <class Buffer, class Callback>
+			void async_write_some(Buffer&& buffer,
+								  Callback&& callback)
+			{
+				auto& strand = client->_strand;
+				auto client = this->client;
+				strand.dispatch([buffer, callback, client, this] {
+					auto& strand = client->_strand;
+					auto& sslSocket = client->sslSocket;
+					sslSocket.async_write_some
+					(std::move(buffer),
+					 strand.wrap(std::move(callback)));
+				});
+			}
+			
+		};
+		
+		void handleClient(std::shared_ptr<MasterClient> client) override final
+		{
+			if (handled.exchange(true)) {
+				MSCThrow(InvalidOperationException("handleClient was called twice."));
+			}
+			
+			auto self = this->shared_from_this();
+			std::shared_ptr<ClientInputOutput> io
+			(new ClientInputOutput(client));
+			
+			// Start downstream
+			startAsyncPipe(*io, *baseHandler, 4096, [self, this, client, io] (const boost::system::error_code& error, std::size_t count) {
+				if (error) {
+					BOOST_LOG_SEV(client->log, LogLevel::Debug) <<
+					"Downstream error.: " << error;
+				} else {
+					BOOST_LOG_SEV(client->log, LogLevel::Debug) <<
+					"Downstream reached EOF.";
+				}
+				client->shutdown();
+			});
+			
+			// Start upstream
+			startAsyncPipe(*baseHandler, *io, 4096, [self, this, client, io] (const boost::system::error_code& error, std::size_t count) {
+				if (error) {
+					BOOST_LOG_SEV(client->log, LogLevel::Debug) <<
+					"Upstream error.: " << error;
+				} else {
+					BOOST_LOG_SEV(client->log, LogLevel::Debug) <<
+					"Upstream reached EOF.";
+				}
+				client->shutdown();
+			});
+		}
+		
+		void shutdown()
+		{
+			baseHandler->shutdown();
+		}
+	public:
+		MasterClientHandler(const T& baseHandler):
+		baseHandler(baseHandler),
+		handled(false)
+		{ }
+		MasterClientHandler(T&& baseHandler):
+		baseHandler(baseHandler),
+		handled(false)
+		{ }
 	};
 }
 

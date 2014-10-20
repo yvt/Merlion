@@ -67,6 +67,35 @@ namespace mcore
 		};
 	}
 	
+	class MasterNodeClientStream::ClientHandler :
+	boost::noncopyable,
+	public std::enable_shared_from_this<ClientHandler>
+	{
+		std::shared_ptr<MasterNodeClientStream> stream;
+	public:
+		ClientHandler(const std::shared_ptr<MasterNodeClientStream>& stream):
+		stream(stream)
+		{
+		}
+		
+		// FIXME: use strand to synchronize access to the tcp socket
+		template <class... TArgs>
+		void async_read_some(TArgs&& ...args)
+		{
+			stream->connection->async_read_some(std::forward<TArgs>(args)...);
+		}
+		template <class... TArgs>
+		void async_write_some(TArgs&& ...args)
+		{
+			stream->connection->async_write_some(std::forward<TArgs>(args)...);
+		}
+		
+		void shutdown()
+		{
+			stream->connection->shutdown();
+		}
+	};
+	
 	void MasterNodeClientStream::service()
 	{
 		// Read clientId
@@ -95,38 +124,17 @@ namespace mcore
 				return;
 			}
 			
-			client = req->response->client();
-			
-			auto c = connection;
-			auto cli = client;
+			auto cli = req->response->client();
+			client = cli;
 			
 			req->response->accept
-			([this, self, c, cli](ssl::stream<ip::tcp::socket>& stream, boost::asio::strand& strand) {
-				startAsyncPipe(stream, *connection, 4096, strand.wrap([this, self, c, cli](const boost::system::error_code &error, std::uint64_t) {
-					if (error) {
-						BOOST_LOG_SEV(log, LogLevel::Debug) <<
-						"Downstream error.: " << error;
-					} else {
-						BOOST_LOG_SEV(log, LogLevel::Debug) <<
-						"End of downstream.";
-				   }
-				   shutdown();
-			    }));
-				startAsyncPipe(*connection, stream, 4096, strand.wrap([this, self, c, cli](const boost::system::error_code &error, std::uint64_t) {
-					if (error) {
-						BOOST_LOG_SEV(log, LogLevel::Debug) <<
-						"Upstream error.: " << error;
-					} else {
-						BOOST_LOG_SEV(log, LogLevel::Debug) <<
-						"End of upstream.";
-					}
-				   shutdown();
-			    }));
-			},
-			[this, self]() {
-				shutdown();
-			},
-			req->version);
+			([this, self, cli] {
+				std::shared_ptr<ClientHandler> handler(new ClientHandler(self));
+				return std::make_shared<MasterClientHandler<std::shared_ptr<ClientHandler>>>(handler);
+			}, [this, self, cli] {
+				 shutdown();
+			}, req->version);
+			
 		});
 	}
 	
@@ -139,9 +147,10 @@ namespace mcore
 	{
 		auto self = shared_from_this();
 		
-		if (client) {
-			client->shutdown();
-			client.reset();
+		auto cli = client.lock();
+		client.reset();
+		if (cli) {
+			cli->shutdown();
 		}
 		
 		connection->shutdown();

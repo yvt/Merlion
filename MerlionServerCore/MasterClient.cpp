@@ -47,7 +47,8 @@ namespace mcore
     }
 
     MasterClient::~MasterClient()
-    {
+	{
+		BOOST_LOG_SEV(log, LogLevel::Debug) << "Finalized.";
     }
 
     void MasterClient::handleNewClient()
@@ -170,7 +171,7 @@ namespace mcore
 					  });
 	}
 	
-	void MasterClient::connectionApproved(std::function<void(sslSocketType&, strandType&)> onsuccess,
+	void MasterClient::connectionApproved(std::function<std::shared_ptr<BaseMasterClientHandler>()> onsuccess,
 										  std::function<void()> onfail,
 										  const std::string& version)
 	{
@@ -193,7 +194,16 @@ namespace mcore
 				onfail();
 				shutdown();
 			} else {
-				onsuccess(sslSocket, _strand);
+				handler = onsuccess();
+				try {
+					handler->handleClient(shared_from_this());
+				} catch (...) {
+					BOOST_LOG_SEV(log, LogLevel::Error) << "Error while accepting client.: " <<
+					boost::current_exception_diagnostic_information();
+					onfail();
+					shutdown();
+					return;
+				}
 				timeoutTimer.cancel();
 			}
 		});
@@ -238,6 +248,12 @@ namespace mcore
 			try { tcpSocket().close(); } catch (...) { }
 			assert(!tcpSocket().is_open());
 			
+			auto h = handler;
+			if (h) {
+				h->shutdown();
+			}
+			handler.reset();
+			
 			timeoutTimer.cancel();
 		});
     }
@@ -252,7 +268,7 @@ namespace mcore
 		reject("No one responded to MasterClientResponse.");
 	}
 	
-	void MasterClientResponse::accept(std::function<void (MasterClient::sslSocketType &, MasterClient::strandType&)> onsuccess,
+	void MasterClientResponse::accept(std::function<std::shared_ptr<BaseMasterClientHandler>()> onsuccess,
 									  std::function<void ()> onfail,
 									  const std::string& version)
 	{

@@ -92,7 +92,7 @@ namespace mcore
 				{
 					auto& s = *this->state;
 					
-					if (error) {
+					if (count == 0 || error) {
 						s.callback(error, s.count);
 						return;
 					}
