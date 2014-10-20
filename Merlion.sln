@@ -57,7 +57,7 @@ Global
 		{FF79C716-3A97-4954-B941-1CED9FECD716}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(MonoDevelopProperties) = preSolution
-		StartupItem = MerlionServer\MerlionServer.csproj
+		StartupItem = MerCat\MerCat.csproj
 		Policies = $0
 		$0.DotNetNamingPolicy = $1
 		$1.DirectoryNamespaceAssociation = PrefixedHierarchical

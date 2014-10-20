@@ -20,6 +20,7 @@ using Merlion.Client;
 using System.Threading;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 
 namespace Merlion.MerCat
 {
@@ -29,13 +30,18 @@ namespace Merlion.MerCat
 		Stress
 	}
 
+	enum ErrorMode
+	{
+		Respawn,
+		LeaveClosed,
+		Fatal
+	}
+
 	class MainClass
 	{
-		static long numSent = 0;
-		static long numReceived = 0;
 		static readonly object sync = new object();
 
-		static CommandLineArguments cmdArgs;
+		static public CommandLineArguments cmdArgs;
 
 		public static void Main (string[] args)
 		{
@@ -51,94 +57,124 @@ namespace Merlion.MerCat
 			default:
 				throw new ArgumentOutOfRangeException ();
 			}
+		}
 
-			if (args.Length == 1) {
+		static StressTest stressTest;
+		static ManualResetEvent stressTestAbortEvent = new ManualResetEvent(false);
+
+		static void PrintStressTestStatus()
+		{
+			lock (sync) {
+				var numSent = stressTest.SentPacketCount;
+				var numReceived = stressTest.ReceivedPacketCount;
+				long chunkSize = cmdArgs.ChunkSize;
+				double secs = stressTest.RunningTime.TotalSeconds;
+
+				Console.WriteLine ("============================================");
+				Console.WriteLine ();
+				Console.WriteLine ("Time                    : {0}", stressTest.RunningTime);
+				Console.WriteLine ();
+				Console.WriteLine ("-----------------");
+				Console.WriteLine ();
+				Console.WriteLine ("Sent / Received Packets : {0:N0} / {1:N0} [packets]", 
+					numSent, numReceived);
+				Console.WriteLine (" (Sent - Received)      : {0:N0}", 
+					numSent - numReceived);
+				Console.WriteLine (" (per second)           : {0:N0} / {1:N0} [packets/sec]", 
+					(double)numSent / secs,
+					(double)numReceived / secs);
+
+				Console.WriteLine ();
+				Console.WriteLine ("Sent / Received Bytes   : {0:N0} / {1:N0} [bytes]", 
+					numSent * chunkSize, numReceived * chunkSize);
+				Console.WriteLine (" (Sent - Received)      : {0:N0} [bytes]", 
+					(numSent - numReceived) * chunkSize);
+				Console.WriteLine (" (per second)           : {0:N0} / {1:N0} [bytes/sec]", 
+					(double)(numSent * chunkSize) / secs,
+					(double)(numReceived * chunkSize) / secs);
+				Console.WriteLine ();
+				Console.WriteLine ("-----------------");
+				Console.WriteLine ();
+				Console.WriteLine ("Active Workers          : {0} [workers]", stressTest.ActiveWorkerCount);
+				Console.WriteLine ("Total Workers           : {0} [workers]", stressTest.TotalWorkerCount);
+				Console.WriteLine (" (per second)           : {0} [workers/sec]", 
+					(double)stressTest.TotalWorkerCount / secs);
+				Console.WriteLine ();
+				Console.WriteLine ("-----------------");
+				Console.WriteLine ();
+				Console.WriteLine ("Major failure reasons:");
+
+				var fails = stressTest.GetWorkerFailReasons ();
+				Array.Sort (fails, (a, b) => b.Item2.CompareTo(a.Item2));
+
+				if (fails.Length == 0) {
+					Console.WriteLine ("  (no failures occured yet)");
+				} else {
+					for (int i = 0; i < fails.Length && i < 8; ++i) {
+						Console.WriteLine ("  [{0,8}] {1}", fails[i].Item2, fails[i].Item1.Message);
+					}
+				}
+
+				Console.Out.Flush();
 			}
-			var cmd = args[0];
-			if (cmd.Equals("Stress", StringComparison.InvariantCultureIgnoreCase)) {
+		}
 
+		static void StressTestMonitorThread()
+		{
+			while (stressTest != null) {
+				Console.ReadLine ();
+				PrintStressTestStatus();
+				Thread.Sleep (500);
 			}
-
-			Console.Error.WriteLine ("Unknown command.");
-	
 		}
 
 		static void PerformStressTest()
 		{
-			int count = cmdArgs.Concurrency;
-			var threads = new List<Thread> ();
-			byte[] buffer = new byte[cmdArgs.ChunkSize];
+			Console.Error.WriteLine ("Starting stress test...");
+			Console.Error.WriteLine ("Hit ENTER to display the current status.");
+			Console.Error.WriteLine ("Hit Ctrl+C to abort the test.");
+			Console.WriteLine ();
 
-			new Random ().NextBytes (buffer);
+			stressTest = new StressTest ();
+			stressTest.Aborted += (sender, e) => {
+				stressTestAbortEvent.Set();
+			};
+			stressTest.PerformTest ();
 
-			Console.Error.WriteLine ("Initializing...");
-			for (int i = 0; i < count; ++i) {
-				var client = new MerlionClient (cmdArgs.Address);
-				int index = i;
-				threads.Add (new Thread (() => {
-					client.Connect();
-					var s = client.Stream;
+			var monitorThread = new Thread (StressTestMonitorThread);
+			monitorThread.Start ();
 
-					new Thread(() => {
-						while (true) {
-							int readCount = 0;
-							int read = 0;
-							int retryCount = 100;
-
-							while (read < buffer.Length && retryCount > 0) {
-
-								while ((readCount = s.Read (buffer, read, buffer.Length - read)) > 0) {
-									read += readCount;
-									if (read == buffer.Length)
-										break;
-								}
-								--retryCount;
-								System.Threading.Thread.Sleep(100);
-							}
-
-							if (read < buffer.Length) {
-								throw new System.IO.IOException ("Insufficient data");
-							}
-
-							lock (sync) {
-								++numReceived;
-							}
-						}
-					}).Start();
-
-					while (true) {
-						s.Write(buffer, 0, buffer.Length);
-						s.Flush();
-						lock (sync) {
-							++numSent;
-						}
-						if (cmdArgs.Interval > 0)
-							Thread.Sleep(cmdArgs.Interval);
+			int interrupted = 0;
+			Console.CancelKeyPress += (sender, e) => {
+				++interrupted;
+				if (interrupted == 2) {
+					lock (sync) {
+						Console.WriteLine("Hit Ctrl+C again to terminate... (no report will be generated)");
+						Console.Out.Flush();
 					}
-				}));
-			}
-
-			Console.Error.WriteLine ("Starting... [{0} thread(s)]", count);
-			int cnt = 0;
-			foreach (var th in threads) {
-				Thread.Sleep(10);
-				th.Start ();
-
-				++cnt;
-				Console.Error.WriteLine ("{0} of {1} thread(s) running", cnt, count);
-			}
-
-			while (true) {
-				lock (sync) {
-					Console.WriteLine ("Sent =         {0}", numSent);
-					Console.WriteLine ("Received =     {0}", numReceived);
-					Console.WriteLine ("Not Received = {0}", numSent - numReceived);
-					Console.WriteLine ("-----------------");
 				}
-				Thread.Sleep (1000);
-			}
+				if (interrupted >= 3) {
+					// Hit twice
+					System.Diagnostics.Process.GetCurrentProcess().Kill();
+					return;
+				}
+				lock (sync) {
+					Console.WriteLine("Aborting...");
+					Console.Out.Flush();
+				}
+				e.Cancel = true;
+				stressTest.Abort();
+			};
 
-			return;
+			while (!stressTestAbortEvent.WaitOne ());
+
+			Console.WriteLine ();
+			Console.WriteLine ("### Test completed.");
+			Console.WriteLine ();
+			PrintStressTestStatus ();
+
+			monitorThread.Abort ();
+			Environment.Exit (0);
 		}
 		static void DoNetCat()
 		{
@@ -186,9 +222,13 @@ namespace Merlion.MerCat
 
 		public string Address;
 
+		public ErrorMode ErrorMode = ErrorMode.Respawn;
 		public int Concurrency = 1;
 		public int Interval = 100;
 		public int ChunkSize = 32;
+		public int SpawnInterval = 100;
+		public long SentCountLimit = long.MaxValue;
+		public TimeSpan TimeoutTime = TimeSpan.FromSeconds(10);
 
 		public CommandLineArguments(string[] args)
 		{
@@ -232,6 +272,19 @@ namespace Merlion.MerCat
 			Mode = RunMode.Stress;
 		}
 
+		[Description("Does not respawn a failed connection during the stress test. " +
+			"Test will be stopped when no workers are running.")]
+		void HandleLeaveClosed()
+		{
+			ErrorMode = ErrorMode.LeaveClosed;
+		}
+
+		[Description("Connection failure aborts the stress test.")]
+		void HandleErrorsFatal()
+		{
+			ErrorMode = ErrorMode.Fatal;
+		}
+
 		[Description("Specifies the endpoint of the master server.")]
 		void HandleAddress([Description("IPADDRESS[:PORT]")] string param)
 		{
@@ -252,6 +305,23 @@ namespace Merlion.MerCat
 			Interval = int.Parse (msecs);
 			if (Interval < 0)
 				throw new ArgumentOutOfRangeException ("msecs", "Must be non-zero.");
+		}
+
+		[Description("Specifies time interval of spawning workers during the stress test.")]
+		void HandleSpawnInterval(string msecs)
+		{
+			SpawnInterval = int.Parse (msecs);
+			if (SpawnInterval < 0)
+				throw new ArgumentOutOfRangeException ("msecs", "Must be non-zero.");
+		}
+
+		[Description("Specifies the maximum number of packet sent per worker during the stress test. " +
+			"Worker will fail after the specified number of packets.")]
+		void HandleLimitCount(long count)
+		{
+			SentCountLimit = count;
+			if (SentCountLimit < 0)
+				throw new ArgumentOutOfRangeException ("count", "Must be non-zero.");
 		}
 
 		[Description("Specifies the number of bytes sent at once during stress test.")]
