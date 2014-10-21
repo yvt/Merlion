@@ -41,7 +41,7 @@ namespace mcore
 		std::weak_ptr<NodeDomain> const domain;
 		std::uint64_t const _clientId;
 		State state;
-		std::recursive_mutex mutex;
+		boost::asio::strand _strand;
 		std::string const room;
 		
 		boost::asio::ip::tcp::socket masterSocket;

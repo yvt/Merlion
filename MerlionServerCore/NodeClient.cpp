@@ -40,7 +40,8 @@ namespace mcore
 	upSocket(domain->node().library()->ioService()),
 	downSocket(domain->node().library()->ioService()),
 	upPipe {0, 0},
-	downPipe {0, 0}
+	downPipe {0, 0},
+	_strand {domain->node().library()->ioService()}
 	{
 		log.setChannel(str(format("Client:%d") % clientId));
 	}
@@ -48,8 +49,7 @@ namespace mcore
 	bool NodeClient::accept()
 	{
 		auto self = shared_from_this();
-		std::lock_guard<std::recursive_mutex> lock(mutex);
-		
+			
 		assert(state == State::NotAccepted);
 		
 		state = State::WaitingForApplication;
@@ -82,56 +82,58 @@ namespace mcore
 				<< format("Could not accept client because of an error.:")
 				<< boost::current_exception_diagnostic_information();
 				
-				std::lock_guard<std::recursive_mutex> lock(mutex);
-				if (state == State::WaitingForApplication) {
-					reject();
+				_strand.post([this, self] {
+					if (state == State::WaitingForApplication) {
+						reject();
+					} else {
+						assert(state == State::Closed);
+					}
+				});
+				return;
+			}
+			
+			_strand.post([this, self, destroyFunc] {
+				if (state == State::Closed) {
+					// Rollback.
+					BOOST_LOG_SEV(log, LogLevel::Debug) << "Cancelling the creation of the client handler.";
+					try {
+						destroyFunc(clientId());
+					} catch (...) {
+						// Very problematic...
+						BOOST_LOG_SEV(log, LogLevel::Error)
+						<< format("ROLLBACK FAILURE: Failed to destroying a client handler after being disconnected.")
+						<< boost::current_exception_diagnostic_information();
+					}
+					return;
 				} else {
-					assert(state == State::Closed);
+					assert(state == State::WaitingForApplication);
+					
+					connectToMaster();
 				}
-				return;
-			}
+			});
 			
-			std::lock_guard<std::recursive_mutex> lock(mutex);
-			
-			if (state == State::Closed) {
-				// Rollback.
-				BOOST_LOG_SEV(log, LogLevel::Debug) << "Cancelling the creation of the client handler.";
-				try {
-					destroyFunc(clientId());
-				} catch (...) {
-					// Very problematic...
-					BOOST_LOG_SEV(log, LogLevel::Error)
-					<< format("ROLLBACK FAILURE: Failed to destroying a client handler after being disconnected.")
-					<< boost::current_exception_diagnostic_information();
-				}
-				return;
-			} else {
-				assert(state == State::WaitingForApplication);
-				
-				connectToMaster();
-			}
 		});
-		
+
 		return true;
 	}
 	
 	void NodeClient::reject()
 	{
 		auto self = shared_from_this();
-		std::lock_guard<std::recursive_mutex> lock(mutex);
-		assert(state == State::NotAccepted ||
-			   state == State::WaitingForApplication);
-		
-		state = State::Closed;
-		
-		onConnectionRejected(self);
-		onClosed(self);
+		_strand.post([this, self] {
+			assert(state == State::NotAccepted ||
+				   state == State::WaitingForApplication);
+			
+			state = State::Closed;
+			
+			onConnectionRejected(self);
+			onClosed(self);
+		});
 	}
 	
 	void NodeClient::connectToMaster()
 	{
 		auto self = shared_from_this();
-		std::lock_guard<std::recursive_mutex> lock(mutex);
 		assert(state == State::WaitingForApplication);
 		
 		auto dom = domain.lock();
@@ -147,8 +149,7 @@ namespace mcore
 		auto destroyFunc = param.destroyClientFunction;
 		auto endpoint = node.masterEndpoint();
 		
-		masterSocket.async_connect(endpoint, [this, self, setupFunc, destroyFunc, dom](const boost::system::error_code& error) {
-			std::lock_guard<std::recursive_mutex> lock(mutex);
+		masterSocket.async_connect(endpoint, _strand.wrap([this, self, setupFunc, destroyFunc, dom](const boost::system::error_code& error) {
 			
 			try {
 				if (error) {
@@ -237,14 +238,13 @@ namespace mcore
 				state = State::Closed;
 				onClosed(self);
 			}
-		});
+		}));
 		
 	}
 	
 	void NodeClient::cancelConnectToMaster()
 	{
 		auto self = shared_from_this();
-		std::lock_guard<std::recursive_mutex> lock(mutex);
 		assert(state == State::ConnectingToMaster);
 		
 		state = State::Closed;
@@ -255,12 +255,11 @@ namespace mcore
 	void NodeClient::startService()
 	{
 		auto self = shared_from_this();
-		std::lock_guard<std::recursive_mutex> lock(mutex);
 		assert(state == State::Servicing);
 		
 		BOOST_LOG_SEV(log, LogLevel::Debug) << "Starting service.";
 		
-		startAsyncPipe(masterSocket, downSocket, 8192, [this, self](const boost::system::error_code& error, std::uint64_t) {
+		startAsyncPipe(masterSocket, downSocket, 8192, _strand.wrap([this, self](const boost::system::error_code& error, std::uint64_t) {
 			if (error) {
 				BOOST_LOG_SEV(log, LogLevel::Debug) << "Downstream socket error.: " << error;
 				terminateService();
@@ -268,8 +267,8 @@ namespace mcore
 				try { downSocket.close(); } catch(...) { }
 				socketDown();
 			}
-		});
-		startAsyncPipe(upSocket, masterSocket, 8192, [this, self](const boost::system::error_code& error, std::uint64_t) {
+		}));
+		startAsyncPipe(upSocket, masterSocket, 8192, _strand.wrap([this, self](const boost::system::error_code& error, std::uint64_t) {
 			if (error) {
 				BOOST_LOG_SEV(log, LogLevel::Debug) << "Upstream socket error.: " << error;
 				terminateService();
@@ -277,14 +276,13 @@ namespace mcore
 				try { upSocket.close(); } catch(...) { }
 				socketDown();
 			}
-		});
+		}));
 		
 	}
 	
 	void NodeClient::socketDown()
 	{
 		auto self = shared_from_this();
-		std::lock_guard<std::recursive_mutex> lock(mutex);
 		if (!downSocket.is_open() && !upSocket.is_open()) {
 			BOOST_LOG_SEV(log, LogLevel::Debug) << "Both endpoint closed.";
 			terminateService();
@@ -294,7 +292,6 @@ namespace mcore
 	void NodeClient::terminateService()
 	{
 		auto self = shared_from_this();
-		std::lock_guard<std::recursive_mutex> lock(mutex);
 		//assert(state == State::Servicing);
 		
 		if (upSocket.is_open()) upSocket.close();
@@ -309,24 +306,25 @@ namespace mcore
 	void NodeClient::drop()
 	{
 		auto self = shared_from_this();
-		std::lock_guard<std::recursive_mutex> lock(mutex);
-		switch (state) {
-			case State::NotAccepted:
-			case State::WaitingForApplication:
-				reject();
-				break;
-			case State::ConnectingToMaster:
-				cancelConnectToMaster();
-				break;
-			case State::SettingUpApplication:
-				assert(false);
-				break;
-			case State::Servicing:
-				terminateService();
-				break;
-			case State::Closed:
-				break;
-		}
+		_strand.post([this, self] {
+			switch (state) {
+				case State::NotAccepted:
+				case State::WaitingForApplication:
+					reject();
+					break;
+				case State::ConnectingToMaster:
+					cancelConnectToMaster();
+					break;
+				case State::SettingUpApplication:
+					assert(false);
+					break;
+				case State::Servicing:
+					terminateService();
+					break;
+				case State::Closed:
+					break;
+			}
+		});
 	}
 	
 	NodeClient::~NodeClient()
