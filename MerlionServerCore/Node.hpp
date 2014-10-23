@@ -48,6 +48,7 @@ namespace mcore
 	class Library;
 	class NodeDomain;
 	class NodeClient;
+	class NodeVersionManager;
 	class NodeVersionLoader;
 	
 	class Node: boost::noncopyable,
@@ -55,6 +56,7 @@ namespace mcore
 	{
 		std::shared_ptr<Library> _library;
 		TypedLogger<Node> log;
+		boost::asio::strand _strand;
 		
 		enum class State
 		{
@@ -79,10 +81,10 @@ namespace mcore
 		
 		boost::asio::ip::tcp::endpoint endpoint;
 		boost::asio::ip::tcp::socket socket;
-		std::recursive_mutex socketMutex;
 		State state;
 		
-		std::unordered_set<std::string> versionsToLoad;
+		class DomainInstance;
+		std::shared_ptr<NodeVersionManager> versionManager;
 		std::shared_ptr<NodeVersionLoader> versionLoader;
 		
 		boost::asio::deadline_timer timeoutTimer;
@@ -99,8 +101,6 @@ namespace mcore
 		void sendHeader();
 		void receiveCommandHeader();
 		void receiveCommandBody(std::size_t);
-		
-		void loadDomainIfNotLoaded(const std::string&);
 		
 		template <class F>
 		void sendCommand(const std::string& name, F gen, bool unreliable = false);

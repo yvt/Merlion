@@ -25,6 +25,7 @@
 #include "NodeVersionLoader.hpp"
 #include "Version.h"
 #include "Library.hpp"
+#include "NodeVersionManager.hpp"
 
 namespace asio = boost::asio;
 using boost::format;
@@ -150,6 +151,35 @@ namespace mcore
 			}
 		};
 	}
+	
+	class Node::DomainInstance:
+	public NodeVersionManagerDomainInstance
+	{
+		std::weak_ptr<Node> const node;
+		std::string version;
+	public:
+		DomainInstance(const std::shared_ptr<Node> &node,
+					   const std::string &version):
+		node(node), version(version)
+		{
+		}
+		~DomainInstance() { }
+		void unload() override
+		{
+			auto lockedNode = node.lock();
+			if (!lockedNode) {
+				return;
+			}
+			
+			auto version = this->version;
+			
+			lockedNode->_strand.post([version, lockedNode] {
+				lockedNode->domains.erase(version);
+				
+				lockedNode->_parameters.unloadVersionFunction(version);
+			});
+		}
+	};
 
 	Node::Node(const std::shared_ptr<Library> &library, const NodeParameters &parameters):
 	_library(library),
@@ -157,6 +187,7 @@ namespace mcore
 	socket(library->ioService()),
 	timeoutTimer(library->ioService()),
 	reconnectTimer(library->ioService()),
+	_strand(library->ioService()),
 	endpoint(parseTcpEndpoint(parameters.masterEndpoint)),
 	state(State::NotStarted),
 	startTime(boost::posix_time::second_clock::universal_time())
@@ -165,61 +196,54 @@ namespace mcore
 		
 		info.nodeName = parameters.nodeName;
 		info.serverSoftwareName = MSC_VERSION_STRING;
+		
 		versionLoader = std::make_shared<NodeVersionLoader>(endpoint);
 		
-		versionLoader->onVersionAboutToBeDownloaded.connect([=](const std::string &version, bool &cancel) {
-			std::lock_guard<std::recursive_mutex> lock(socketMutex);
-			
-			// No longer needed?
-			if (versionsToLoad.find(version) == versionsToLoad.end())
-				cancel = true;
-			
-			// Already downloaded?
-			auto path = _parameters.getPackagePathFunction(version);
-			if (boost::filesystem::exists(path)) {
-				cancel = true;
-				loadDomainIfNotLoaded(version);
-			}
-		});
 		versionLoader->onNeedsDownloadFileName.connect([=](const std::string &version, std::string &path) {
 			path = _parameters.getPackageDownloadPathFunction(version);
 		});
-		versionLoader->onVersionDownloaded.connect([=](const std::string &version) {
-			// Deploy
-			try {
-				_parameters.deployPackageFunction(version);
-			} catch(...) {
-				BOOST_LOG_SEV(log, LogLevel::Error) <<
-				format("Failed to deploy version '%s'.: ") % version
-				<< boost::current_exception_diagnostic_information();
-				
-				std::lock_guard<std::recursive_mutex> lock(socketMutex);
-				versionsToLoad.erase(version);
+		
+		versionManager = std::make_shared<NodeVersionManager>(versionLoader);
+		
+		versionManager->onStartDomain.connect([=](std::shared_ptr<NodeVersionManagerDomain> domain) {
+			auto version = domain->version();
+			
+			// Is the version not deployed yet?
+			auto path = _parameters.getPackagePathFunction(version);
+			if (!boost::filesystem::exists(path)) {
+				// Need to download.
+				domain->needsDownload();
 				return;
 			}
 			
-			BOOST_LOG_SEV(log, LogLevel::Info) <<
-			format("Deployed version '%s'.: ") % version;
-			
-			std::lock_guard<std::recursive_mutex> lock(socketMutex);
-			
-			// No longer needed?
-			if (versionsToLoad.find(version) == versionsToLoad.end())
-				return;
-			
+			// (Actually we can do this in another thread...)
 			try {
-				loadDomainIfNotLoaded(version);
+				_parameters.loadVersionFunction(version);
 			} catch (...) {
 				BOOST_LOG_SEV(log, LogLevel::Error) <<
-				format("Failed to load version '%s'.: ") % version <<
-				boost::current_exception_diagnostic_information();
+				format("Failed to start the domain of version '%s'.: ") %
+				version << boost::current_exception_diagnostic_information();
+				
+				domain->loadFailed();
+				return;
 			}
-		});
-		versionLoader->onVersionDownloadFailed.connect([=](const std::string& version) {
-			std::lock_guard<std::recursive_mutex> lock(socketMutex);
-			versionsToLoad.erase(version);
+			
+			_strand.post([=] {
+				auto ndom = std::make_shared<NodeDomain>(*this, version);
+				domains.emplace(version, ndom);
+				
+				std::shared_ptr<DomainInstance> inst
+				{ new DomainInstance(shared_from_this(), version) };
+				
+				domain->loaded(inst);
+				
+				ndom->setAcceptsClient(true);
+			});
 		});
 		
+		versionManager->onNeedToDeployVersion.connect([=](const std::string& version) {
+			_parameters.deployPackageFunction(version);
+		});
 	}
 	
 	void Node::start()
@@ -230,7 +254,6 @@ namespace mcore
 		}
 		state = State::Connecting;
 		
-		std::lock_guard<std::recursive_mutex> lock(socketMutex);
 		connectAsync();
 		
 		BOOST_LOG_SEV(log, LogLevel::Info) <<
@@ -245,19 +268,17 @@ namespace mcore
 	
 	void Node::setTimeout()
 	{
-		std::lock_guard<std::recursive_mutex> lock(socketMutex);
-		
 		timeoutTimer.cancel();
 		timeoutTimer.expires_from_now(boost::posix_time::seconds(5));
-		timeoutTimer.async_wait([this](const boost::system::error_code& error) {
+		timeoutTimer.async_wait(_strand.wrap([this](const boost::system::error_code& error) {
 			auto self = shared_from_this();
-			if (error) return;
+			if (error)
+				return;
+			
 			BOOST_LOG_SEV(log, LogLevel::Error) << "Timed out. Disconnecting.";
 			
-			std::lock_guard<std::recursive_mutex> lock(socketMutex);
-			
 			nodeFailure();
-		});
+		}));
 	}
 	
 	void Node::nodeFailure()
@@ -279,8 +300,6 @@ namespace mcore
 	bool Node::shutdown()
 	{
 		auto self = shared_from_this();
-		
-		std::lock_guard<std::recursive_mutex> lock(socketMutex);
 		
 		auto lastState = state;
 		if (state == State::Disconnected) {
@@ -322,17 +341,14 @@ namespace mcore
 	{
 		BOOST_LOG_SEV(log, LogLevel::Info) << "Connecting to " << endpoint << ".";
 		
-		std::lock_guard<std::recursive_mutex> lock(socketMutex);
-		
 		if (state != State::Connecting) {
 			BOOST_LOG_SEV(log, LogLevel::Debug) << "Aborting due to an invalid state.";
 			return;
 		}
 		
 		try {
-			socket.async_connect(endpoint, [this](const boost::system::error_code& error) {
+			socket.async_connect(endpoint, _strand.wrap([this](const boost::system::error_code& error) {
 				auto self = shared_from_this();
-				std::lock_guard<std::recursive_mutex> lock(socketMutex);
 				
 				try {
 					if (error) {
@@ -346,7 +362,7 @@ namespace mcore
 					boost::current_exception_diagnostic_information();
 					nodeFailure();
 				}
-			});
+			}));
 		} catch (...) {
 			BOOST_LOG_SEV(log, LogLevel::Error) << "Failed to connect.: " <<
 			boost::current_exception_diagnostic_information();
@@ -376,17 +392,14 @@ namespace mcore
 		std::array<asio::const_buffer, 2> buffers =
 		{ asio::buffer(*buf1), asio::buffer(*buf2) };
 		
-		std::lock_guard<std::recursive_mutex> lock(socketMutex);
-		
 		if (state != State::Connecting) {
 			BOOST_LOG_SEV(log, LogLevel::Debug) << "Aborting due to an invalid state.";
 			return;
 		}
 		
-		asio::async_write(socket, buffers, [this, buf1, buf2](const boost::system::error_code& err, std::size_t)
+		asio::async_write(socket, buffers, _strand.wrap([this, buf1, buf2](const boost::system::error_code& err, std::size_t)
 		{
 			auto self = shared_from_this();
-			std::lock_guard<std::recursive_mutex> lock(socketMutex);
 			
 			if (state != State::Connecting) {
 				BOOST_LOG_SEV(log, LogLevel::Debug) << "Aborting due to an invalid state.";
@@ -409,23 +422,20 @@ namespace mcore
 				boost::current_exception_diagnostic_information();
 				nodeFailure();
 			}
-		});
+		}));
 	}
 	
 	void Node::receiveCommandHeader()
 	{
 		auto buf = std::make_shared<std::uint32_t>();
 		
-		std::lock_guard<std::recursive_mutex> lock(socketMutex);
-		
 		if (state != State::Servicing) {
 			BOOST_LOG_SEV(log, LogLevel::Debug) << "Aborting due to an invalid state.";
 			return;
 		}
 		
-		asio::async_read(socket, asio::buffer(buf.get(), 4), [this, buf](const boost::system::error_code& err, std::size_t) {
+		asio::async_read(socket, asio::buffer(buf.get(), 4), _strand.wrap([this, buf](const boost::system::error_code& err, std::size_t) {
 			auto self = shared_from_this();
-			std::lock_guard<std::recursive_mutex> lock(socketMutex);
 			
 			if (state != State::Servicing) {
 				BOOST_LOG_SEV(log, LogLevel::Debug) << "Aborting due to an invalid state.";
@@ -448,23 +458,21 @@ namespace mcore
 				boost::current_exception_diagnostic_information();
 				nodeFailure();
 			}
-		});
+		}));
 	}
 	void Node::receiveCommandBody(std::size_t size)
 	{
 		auto buf = std::make_shared<std::vector<char>>();
 		buf->resize(size);
 		
-		std::lock_guard<std::recursive_mutex> lock(socketMutex);
 		
 		if (state != State::Servicing) {
 			BOOST_LOG_SEV(log, LogLevel::Debug) << "Aborting due to an invalid state.";
 			return;
 		}
 		
-		asio::async_read(socket, asio::buffer(*buf), [this, buf](const boost::system::error_code& err, std::size_t) {
+		asio::async_read(socket, asio::buffer(*buf), _strand.wrap([this, buf](const boost::system::error_code& err, std::size_t) {
 			auto self = shared_from_this();
-			std::lock_guard<std::recursive_mutex> lock(socketMutex);
 			
 			if (state != State::Servicing) {
 				BOOST_LOG_SEV(log, LogLevel::Debug) << "Aborting due to an invalid state.";
@@ -518,42 +526,13 @@ namespace mcore
 						case NodeCommand::LoadVersion:
 						{
 							auto version = reader.readString();
-							BOOST_LOG_SEV(log, LogLevel::Info) <<
-							format("Loading version '%s'.") % version;
-							try {
-								if (domains.find(version) != domains.end()) {
-									MSCThrow(InvalidOperationException("Already loaded."));
-									break;
-								}
-								auto path = _parameters.getPackagePathFunction(version);
-								if (boost::filesystem::exists(path)) {
-									loadDomainIfNotLoaded(version);
-								} else {
-									versionsToLoad.insert(version);
-								}
-							} catch (...) {
-								BOOST_LOG_SEV(log, LogLevel::Error) <<
-								format("Failed to load version '%s'.: ") % version <<
-								boost::current_exception_diagnostic_information();
-							}
+							versionManager->requestLoadVersion(version);
 						}
 							break;
 						case NodeCommand::UnloadVersion:
 						{
 							auto version = reader.readString();
-							BOOST_LOG_SEV(log, LogLevel::Info) <<
-							format("Unloading version '%s'.") % version;
-							try {
-								auto it = domains.find(version);
-								if (it != domains.end())
-									it->second->setAcceptsClient(false);
-								_parameters.unloadVersionFunction(version);
-								domains.erase(version);
-							} catch (...) {
-								BOOST_LOG_SEV(log, LogLevel::Error) <<
-								format("Failed to unload version '%s'.: ") % version <<
-								boost::current_exception_diagnostic_information();
-							}
+							versionManager->requestUnloadVersion(version);
 						}
 							
 							break;
@@ -564,7 +543,7 @@ namespace mcore
 				boost::current_exception_diagnostic_information();
 				nodeFailure();
 			}
-		});
+		}));
 	}
 
 	template <class F>
@@ -576,7 +555,6 @@ namespace mcore
 		*reinterpret_cast<std::uint32_t *>(gen.data()) = static_cast<std::uint32_t>(gen.size() - 4);
 		
 		auto buf = std::make_shared<std::vector<char>>(std::move(gen.vector()));
-		std::lock_guard<std::recursive_mutex> lock(socketMutex);
 		
 		if (state != State::Servicing) {
 			if (unreliable)
@@ -586,19 +564,20 @@ namespace mcore
 		}
 		
 		auto self = shared_from_this();
-		asio::async_write(socket, asio::buffer(*buf), [this, self, buf, name, unreliable](const boost::system::error_code& err, std::size_t) {
-			std::lock_guard<std::recursive_mutex> lock(socketMutex);
-			try {
-				if (err) {
-					MSCThrow(boost::system::system_error(err));
+		_strand.dispatch([this, self, buf, name, unreliable] {
+			asio::async_write(socket, asio::buffer(*buf), _strand.wrap([this, self, buf, name, unreliable](const boost::system::error_code& err, std::size_t) {
+				try {
+					if (err) {
+						MSCThrow(boost::system::system_error(err));
+					}
+				} catch (...) {
+					if (unreliable)
+						return;
+					BOOST_LOG_SEV(log, LogLevel::Error) << "Failed to send " << name << ".: " <<
+					boost::current_exception_diagnostic_information();
+					nodeFailure();
 				}
-			} catch (...) {
-				if (unreliable)
-					return;
-				BOOST_LOG_SEV(log, LogLevel::Error) << "Failed to send " << name << ".: " <<
-				boost::current_exception_diagnostic_information();
-				nodeFailure();
-			}
+			}));
 		});
 	}
 	
@@ -658,49 +637,38 @@ namespace mcore
 	void Node::versionLoaded(const std::string &v)
 	{
 		auto self = shared_from_this();
-		std::lock_guard<std::recursive_mutex> lock(socketMutex);
-		if (state != State::Servicing)
-			MSCThrow(InvalidOperationException());
-		sendVersionLoaded(v);
+		_strand.dispatch([self, this, v] {
+			if (state != State::Servicing)
+				MSCThrow(InvalidOperationException());
+			sendVersionLoaded(v);
+		});
 	}
 	void Node::versionUnloaded(const std::string &v)
 	{
 		auto self = shared_from_this();
-		std::lock_guard<std::recursive_mutex> lock(socketMutex);
-		if (state != State::Servicing)
-			MSCThrow(InvalidOperationException());
-		sendVersionUnloaded(v);
+		_strand.dispatch([self, this, v] {
+			if (state != State::Servicing)
+				MSCThrow(InvalidOperationException());
+			sendVersionUnloaded(v);
+		});
 	}
 	void Node::bindRoom(const std::string &room, const std::string &version)
 	{
 		auto self = shared_from_this();
-		std::lock_guard<std::recursive_mutex> lock(socketMutex);
-		if (state != State::Servicing)
-			MSCThrow(InvalidOperationException());
-		sendBindRoom(room, version);
+		_strand.dispatch([self, this, room, version] {
+			if (state != State::Servicing)
+				MSCThrow(InvalidOperationException());
+			sendBindRoom(room, version);
+		});
 	}
 	void Node::unbindRoom(const std::string &room)
 	{
 		auto self = shared_from_this();
-		std::lock_guard<std::recursive_mutex> lock(socketMutex);
-		if (state != State::Servicing)
-			MSCThrow(InvalidOperationException());
-		sendUnbindRoom(room);
-	}
-	
-	void Node::loadDomainIfNotLoaded(const std::string &version)
-	{
-		auto self = shared_from_this();
-		std::lock_guard<std::recursive_mutex> lock(socketMutex);
-		
-		if (domains.find(version) != domains.end())
-			return;
-		
-		_parameters.loadVersionFunction(version);
-		domains.emplace(version, std::make_shared<NodeDomain>(*this, version));
-		domains[version]->setAcceptsClient(true);
-		
-		versionsToLoad.erase(version);
+		_strand.dispatch([self, this, room] {
+			if (state != State::Servicing)
+				MSCThrow(InvalidOperationException());
+			sendUnbindRoom(room);
+		});
 	}
 	
 	Node::~Node()
