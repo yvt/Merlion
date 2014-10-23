@@ -22,6 +22,7 @@ Node.cpp
 NodeDomain.cpp
 NodeClient.cpp
 NodeVersionLoader.cpp
+NodeVersionManager.cpp
 Utils.cpp
 Packet.cpp
 Logging.cpp
