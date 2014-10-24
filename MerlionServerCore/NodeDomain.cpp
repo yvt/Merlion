@@ -57,7 +57,11 @@ namespace mcore
 			return;
 		}
 		
-		client->onClosed.connect([this, self](const NodeClient::ptr& client) {
+		std::weak_ptr<NodeDomain> weakSelf(self);
+		client->onClosed.connect([this, weakSelf](const NodeClient::ptr& client) {
+			auto self = weakSelf.lock();
+			if (!self)
+				return;
 			std::lock_guard<std::recursive_mutex> lock(mutex);
 			clients.erase(client->clientId());
 		});
