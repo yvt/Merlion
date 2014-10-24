@@ -68,7 +68,7 @@ namespace mcore
         boost::asio::ssl::context& sslContext;
         sslSocketType sslSocket;
 		
-		std::shared_ptr<BaseMasterClientHandler> handler;
+		std::weak_ptr<BaseMasterClientHandler> handler;
         
         boost::asio::deadline_timer timeoutTimer;
 		

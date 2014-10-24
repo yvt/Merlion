@@ -194,9 +194,10 @@ namespace mcore
 				onfail();
 				shutdown();
 			} else {
-				handler = onsuccess();
+				auto gotHandler = onsuccess();
+				handler = gotHandler;
 				try {
-					handler->handleClient(shared_from_this());
+					gotHandler->handleClient(shared_from_this());
 				} catch (...) {
 					BOOST_LOG_SEV(log, LogLevel::Error) << "Error while accepting client.: " <<
 					boost::current_exception_diagnostic_information();
@@ -248,7 +249,7 @@ namespace mcore
 			try { tcpSocket().close(); } catch (...) { }
 			assert(!tcpSocket().is_open());
 			
-			auto h = handler;
+			auto h = handler.lock();
 			if (h) {
 				h->shutdown();
 			}
