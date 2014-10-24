@@ -70,7 +70,9 @@ namespace mcore
 			return;
 		}
 		
-		
+		if (!client->isOpen()) {
+			clients.erase(client->clientId());
+		}
 		
 	}
 	

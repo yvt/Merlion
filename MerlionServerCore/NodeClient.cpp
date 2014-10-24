@@ -41,7 +41,8 @@ namespace mcore
 	downSocket(domain->node().library()->ioService()),
 	upPipe {0, 0},
 	downPipe {0, 0},
-	_strand {domain->node().library()->ioService()}
+	_strand {domain->node().library()->ioService()},
+	closed {false}
 	{
 		log.setChannel(str(format("Client:%d") % clientId));
 	}
@@ -125,6 +126,7 @@ namespace mcore
 				   state == State::WaitingForApplication);
 			
 			state = State::Closed;
+			closed.store(true);
 			
 			onConnectionRejected(self);
 			onClosed(self);
@@ -236,6 +238,7 @@ namespace mcore
 				}
 				
 				state = State::Closed;
+				closed.store(true);
 				onClosed(self);
 			}
 		}));
@@ -300,6 +303,7 @@ namespace mcore
 		try { masterSocket.shutdown(ip::tcp::socket::shutdown_both); } catch (...) { }
 		try { masterSocket.close(); } catch(...) { }
 		
+		closed.store(true);
 		onClosed(self);
 	}
 	

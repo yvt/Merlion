@@ -41,6 +41,7 @@ namespace mcore
 		std::weak_ptr<NodeDomain> const domain;
 		std::uint64_t const _clientId;
 		State state;
+		std::atomic<bool> closed;
 		boost::asio::strand _strand;
 		std::string const room;
 		
@@ -66,6 +67,8 @@ namespace mcore
 		~NodeClient();
 		
 		std::uint64_t clientId() const { return _clientId; }
+		
+		bool isOpen() const { return !closed; }
 		
 		// State: Not Accepted
 		bool accept();
