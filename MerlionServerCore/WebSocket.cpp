@@ -39,6 +39,8 @@ namespace asiows
 	{
 		web_socket_server<TESTSOCK> server;
 		server.async_start_handshake([](const boost::system::error_code&){});
+		server.async_accept("hoge", [](const boost::system::error_code&){});
+		server.async_reject(0, [](const boost::system::error_code&){});
 		
 		auto &ws = server.socket();
 		ws.async_shutdown(0, "blah", false,

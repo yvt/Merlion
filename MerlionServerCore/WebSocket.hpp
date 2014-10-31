@@ -2123,6 +2123,120 @@ namespace asiows
 		
 	};
 	
+	namespace http_status_codes
+	{
+		enum http_status_code
+		{
+			bad_request = 400,
+			unauthorized = 401,
+			payment_required = 402,
+			forbidden = 403,
+			not_found = 404,
+			method_not_allowed = 405,
+			not_acceptable = 406,
+			proxy_authentication_required = 407,
+			request_timeout = 408,
+			conflict = 409,
+			gone = 410,
+			length_required = 411,
+			precondition_failed = 412,
+			request_entity_too_large = 413,
+			request_uri_too_long = 414,
+			unsupported_media_type = 415,
+			request_range_not_satisfiable = 416,
+			expectation_failed = 417,
+			internal_server_error = 500,
+			not_implemented = 501,
+			bad_gateway = 502,
+			service_unavailable = 503,
+			gateway_timeout = 504,
+			http_version_not_supported = 505
+		};
+	}
+	
+	namespace
+	{
+		const char *http_status_text(int status)
+		{
+			const char *statusText = "Unknown";
+			switch (status) {
+				case 400:
+					statusText = "Bad Request";
+					break;
+				case 401:
+					statusText = "Unauthorized";
+					break;
+				case 402:
+					statusText = "Payment Required";
+					break;
+				case 403:
+					statusText = "Forbidden";
+					break;
+				case 404:
+					statusText = "Not Found";
+					break;
+				case 405:
+					statusText = "Method Not Allowed";
+					break;
+				case 406:
+					statusText = "Not Acceptable";
+					break;
+				case 407:
+					statusText = "Proxy Authentication Required";
+					break;
+				case 408:
+					statusText = "Request Timeout";
+					break;
+				case 409:
+					statusText = "Conflict";
+					break;
+				case 410:
+					statusText = "Gone";
+					break;
+				case 411:
+					statusText = "Length Required";
+					break;
+				case 412:
+					statusText = "Precondition Failed";
+					break;
+				case 413:
+					statusText = "Request Entity Too Large";
+					break;
+				case 414:
+					statusText = "Request-URI Too Long";
+					break;
+				case 415:
+					statusText = "Unsupported Media Type";
+					break;
+				case 416:
+					statusText = "Requested Range Not Satisfiable";
+					break;
+				case 417:
+					statusText = "Expectation Failed";
+					break;
+				case 500:
+					statusText = "Internal Server Error";
+					break;
+				case 501:
+					statusText = "Not Implemented";
+					break;
+				case 502:
+					statusText = "Bad Gateway";
+					break;
+				case 503:
+					statusText = "Service Unavailable";
+					break;
+				case 504:
+					statusText = "Gateway Timeout";
+					break;
+				case 505:
+					statusText = "HTTP Version Not Supported";
+					break;
+			}
+			return statusText;
+		}
+	}
+	
 	enum class http_version
 	{
 		http_1_0, // Prohibited by WebSocket. Never used. [RFC blah 4.2.1]
@@ -2191,6 +2305,9 @@ namespace asiows
 		template <class Callback>
 		void async_accept(const std::string &protocol, Callback&&);
 		
+		template <class Callback>
+		void async_reject(int statusCode, Callback&&);
+		
 	private:
 		NextLayer next_;
 		content_stream content_stream_;
@@ -2218,6 +2335,9 @@ namespace asiows
 		
 		template <class Callback>
 		class accept_op;
+		
+		template <class Callback>
+		class reject_op;
 	};
 	
 	template <class NextLayer>
@@ -2272,6 +2392,7 @@ namespace asiows
 	public detail::intermediate_op<Callback>
 	{
 		web_socket_server& parent;
+		boost::system::error_code last_error;
 	public:
 		start_handshake_op(web_socket_server& parent, const Callback& cb):
 		detail::intermediate_op<Callback>(cb),
@@ -2282,14 +2403,23 @@ namespace asiows
 		
 		void operator () (const boost::system::error_code &error, std::size_t count = 0)
 		{
+			if (last_error) {
+				// Done sending failing response.
+				this->callback(last_error);
+				return;
+			}
+			
 			if (error) {
 				// TODO: raise "Request URI Too Long" when URI is too long?
-				parent.handshake_state_ = handshake_state_t::fail;
-				this->callback(error);
+				if (false) {
+					fail(make_error_code(boost::system::errc::protocol_error),
+						 http_status_codes::request_uri_too_long);
+				} else {
+					fail(error, http_status_codes::bad_request);
+				}
 				return;
 			} else if (count < 2) {
-				parent.handshake_state_ = handshake_state_t::fail;
-				this->callback(make_error_code(boost::system::errc::protocol_error));
+				fail(error, http_status_codes::bad_request);
 				return;
 			}
 			
@@ -2302,7 +2432,7 @@ namespace asiows
 			parent.http_header_total += count;
 			if (parent.http_header_total > 65536 * 2) {
 				// Limit HTTP header size to prevent DoS.
-				this->callback(make_error_code(boost::system::errc::not_supported));
+				fail(make_error_code(boost::system::errc::protocol_error), http_status_codes::request_entity_too_large);
 				return;
 			}
 			
@@ -2310,16 +2440,14 @@ namespace asiows
 				// HTTP Requset Line
 				if (s.size() == 0) {
 					// Empty request line.
-					parent.handshake_state_ = handshake_state_t::fail;
-					this->callback(make_error_code(boost::system::errc::protocol_error));
+					fail(make_error_code(boost::system::errc::protocol_error), http_status_codes::bad_request);
 					return;
 				}
 				
 				std::smatch matches;
 				if (!std::regex_match(s, matches, detail::web_socket_server_regex().requestLineRegex)) {
 					// Unrecognizable request line.
-					parent.handshake_state_ = handshake_state_t::fail;
-					this->callback(make_error_code(boost::system::errc::protocol_error));
+					fail(make_error_code(boost::system::errc::protocol_error), http_status_codes::bad_request);
 					return;
 				}
 				
@@ -2337,8 +2465,7 @@ namespace asiows
 				} else {
 					// Unsupported HTTP version.
 				unsupportedHttpVersion:
-					parent.handshake_state_ = handshake_state_t::fail;
-					this->callback(make_error_code(boost::system::errc::protocol_error));
+					fail(make_error_code(boost::system::errc::protocol_error), http_status_codes::http_version_not_supported);
 					return;
 				}
 				
@@ -2346,8 +2473,7 @@ namespace asiows
 				const auto& httpMethod = matches[1].str();
 				if (!boost::iequals(httpMethod, "GET")) {
 					// Unsupported method.
-					parent.handshake_state_ = handshake_state_t::fail;
-					this->callback(make_error_code(boost::system::errc::protocol_error));
+					fail(make_error_code(boost::system::errc::protocol_error), http_status_codes::method_not_allowed);
 					return;
 				}
 				
@@ -2356,8 +2482,7 @@ namespace asiows
 				
 				if (requestUri == "*" || requestUri.size() == 0) {
 					// Invalid Request-URI.
-					parent.handshake_state_ = handshake_state_t::fail;
-					this->callback(make_error_code(boost::system::errc::protocol_error));
+					fail(make_error_code(boost::system::errc::protocol_error), http_status_codes::not_implemented);
 					return;
 				}
 				
@@ -2365,8 +2490,7 @@ namespace asiows
 					// absoluteURI. Convert to abs_path.
 					if (!std::regex_match(requestUri, matches, detail::web_socket_server_regex().absoluteUriRegex)) {
 						// Failed (this is unlikely to happen)
-						parent.handshake_state_ = handshake_state_t::fail;
-						this->callback(make_error_code(boost::system::errc::protocol_error));
+						fail(make_error_code(boost::system::errc::protocol_error), http_status_codes::internal_server_error);
 						return;
 					}
 					
@@ -2382,36 +2506,31 @@ namespace asiows
 				
 				if (parent.http_version_ == http_version::http_1_0) {
 					// HTTP 1.0 is prohibited by [RFC 4.2.1].
-					parent.handshake_state_ = handshake_state_t::fail;
-					this->callback(make_error_code(boost::system::errc::protocol_error));
+					fail(make_error_code(boost::system::errc::protocol_error), http_status_codes::bad_request);
 					return;
 				}
 				
 				if (parent.http_version_ == http_version::http_1_1 &&
 					parent.http_host_.empty()) {
 					// HTTP 1.1 mandates Host header.
-					parent.handshake_state_ = handshake_state_t::fail;
-					this->callback(make_error_code(boost::system::errc::protocol_error));
+					fail(make_error_code(boost::system::errc::protocol_error), http_status_codes::bad_request);
 					return;
 				}
 				
 				if (!parent.http_upgrade_valid_ ||
 					!parent.http_connection_valid_) {
-					parent.handshake_state_ = handshake_state_t::fail;
-					this->callback(make_error_code(boost::system::errc::not_supported));
+					fail(make_error_code(boost::system::errc::protocol_error), http_status_codes::bad_request);
 					return;
 				}
 				
 				if (parent.http_sec_websocket_key_.size() != 24) {
 					// Sec-WebSocket-Key must be 24 bytes long.
-					parent.handshake_state_ = handshake_state_t::fail;
-					this->callback(make_error_code(boost::system::errc::not_supported));
+					fail(make_error_code(boost::system::errc::protocol_error), http_status_codes::bad_request);
 					return;
 				}
 				
 				if (parent.http_sec_websocket_version_ != "13") {
-					parent.handshake_state_ = handshake_state_t::fail;
-					this->callback(make_error_code(boost::system::errc::not_supported));
+					fail(make_error_code(boost::system::errc::protocol_error), http_status_codes::bad_request);
 					return;
 				}
 				
@@ -2443,8 +2562,7 @@ namespace asiows
 					
 					if (quot) {
 						// quoted-string spanning across the lines.
-						parent.handshake_state_ = handshake_state_t::fail;
-						this->callback(make_error_code(boost::system::errc::not_supported));
+						fail(make_error_code(boost::system::errc::protocol_error), http_status_codes::not_implemented);
 						return;
 					}
 				}
@@ -2480,6 +2598,15 @@ namespace asiows
 		{
 			_asio::async_read_until(parent.next_layer(), parent.streambuf_,
 									parent.separator_, std::move(*this));
+		}
+		
+	private:
+		void fail(const boost::system::error_code &error,
+				  int status)
+		{
+			last_error = error;
+			parent.handshake_state_ = handshake_state_t::read_header;
+			parent.async_reject(status, std::move(*this));
 		}
 	};
 	
@@ -2535,7 +2662,7 @@ namespace asiows
 			s << "\r\n";
 			buffer = std::make_shared<std::string>(s.str());
 			
-			_asio::async_write(parent.next_level(),
+			_asio::async_write(parent.next_,
 							   _asio::buffer(buffer->data(), buffer->size()),
 							   std::move(*this));
 		}
@@ -2544,14 +2671,88 @@ namespace asiows
 	template <class NextLayer>
 	template <class Callback>
 	void web_socket_server<NextLayer>::async_accept
-	(const std::string &protocl, Callback &&cb)
+	(const std::string &protocol, Callback &&cb)
 	{
+		if (handshake_state_ != handshake_state_t::read_header) {
+			cb(make_error_code(boost::system::errc::invalid_argument));
+			return;
+		}
+		
 		handshake_state_ = handshake_state_t::sending_header;
 		
 		accept_op<typename std::remove_reference<Callback>::type>
 		op(*this, std::forward<Callback>(cb));
-		op.perform();
+		op.perform(protocol);
 	}
 	
+	template <class NextLayer>
+	template <class Callback>
+	class web_socket_server<NextLayer>::reject_op :
+	public detail::intermediate_op<Callback>
+	{
+		web_socket_server& parent;
+		std::shared_ptr<std::string> buffer;
+	public:
+		reject_op(web_socket_server& parent, const Callback& cb):
+		detail::intermediate_op<Callback>(cb),
+		parent(parent) { }
+		reject_op(web_socket_server& parent, Callback&& cb):
+		detail::intermediate_op<Callback>(cb),
+		parent(parent) { }
+		
+		void operator () (const boost::system::error_code &error, std::size_t count)
+		{
+			if (error) {
+				parent.handshake_state_ = handshake_state_t::fail;
+				this->callback(error);
+				return;
+			} else if (count < buffer->size()) {
+				parent.handshake_state_ = handshake_state_t::fail;
+				this->callback(make_error_code(boost::system::errc::protocol_error));
+				return;
+			}
+			
+			parent.handshake_state_ = handshake_state_t::fail;
+			this->callback(boost::system::error_code());
+		}
+		
+		void perform(int status)
+		{
+			std::ostringstream s;
+			switch (parent.http_version_) {
+				case http_version::http_1_0:
+					s << "HTTP/1.0";
+					break;
+				case http_version::http_1_1:
+					s << "HTTP/1.1";
+					break;
+			}
+			s << " " << status << " " <<
+			http_status_text(status) << "\r\n";
+			s << "\r\n";
+			buffer = std::make_shared<std::string>(s.str());
+			
+			_asio::async_write(parent.next_,
+							   _asio::buffer(buffer->data(), buffer->size()),
+							   std::move(*this));
+		}
+	};
+	
+	template <class NextLayer>
+	template <class Callback>
+	void web_socket_server<NextLayer>::async_reject
+	(int statusCode, Callback &&cb)
+	{
+		if (handshake_state_ != handshake_state_t::read_header) {
+			cb(make_error_code(boost::system::errc::invalid_argument));
+			return;
+		}
+		
+		handshake_state_ = handshake_state_t::sending_header;
+		
+		reject_op<typename std::remove_reference<Callback>::type>
+		op(*this, std::forward<Callback>(cb));
+		op.perform(statusCode);
+	}
 	
 }
