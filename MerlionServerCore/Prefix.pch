@@ -42,3 +42,4 @@
 #include <boost/signals2.hpp>
 #include <boost/filesystem/fstream.hpp>
 #include <regex>
+#include <boost/algorithm/string.hpp>

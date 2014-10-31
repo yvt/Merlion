@@ -37,7 +37,10 @@ namespace asiows
 	// makes sure web_socket is valid
 	void hoge()
 	{
-		web_socket<TESTSOCK> ws {};
+		web_socket_server<TESTSOCK> server;
+		server.async_start_handshake([](const boost::system::error_code&){});
+		
+		auto &ws = server.socket();
 		ws.async_shutdown(0, "blah", false,
 						  [](const boost::system::error_code&){});
 		ws.async_receive_message([](const boost::system::error_code&){});
@@ -49,5 +52,6 @@ namespace asiows
 			});
 		});
 		ws.async_send_ping("blah", [](const boost::system::error_code &ec){});
+		
 	}
 }

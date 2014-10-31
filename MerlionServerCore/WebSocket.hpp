@@ -17,8 +17,10 @@
 #pragma once
 
 #include <boost/exception/exception.hpp>
+#include <boost/algorithm/string.hpp>
 #include <list>
 #include <unordered_map>
+#include <regex>
 
 namespace asiows
 {
@@ -2035,5 +2037,521 @@ namespace asiows
 				break;
 		}
 	}
+	
+	class http_absolue_path
+	{
+	public:
+		
+		http_absolue_path() = default;
+		http_absolue_path(const std::string &abspath)
+		{
+			auto index = abspath.find('?');
+			
+			auto url_decode = [] (const std::string& str) -> std::string
+			{
+				auto hex_decode = [] (char c) -> int
+				{
+					if (c >= '0' && c <= '9')
+						return c - '0';
+					else if (c >= 'a' && c <= 'f')
+						return c - 'a' + 10;
+					else if (c >= 'A' && c <= 'F')
+						return c - 'A' + 10;
+					else
+						return -1;
+				};
+				
+				std::string output;
+				output.reserve(str.size());
+				
+				for (std::size_t i = 0; i < str.size(); ) {
+					if (str[i] == '%' && i + 2 < str.size()) {
+						int digit1 = hex_decode(str[i + 1]);
+						int digit2 = hex_decode(str[i + 2]);
+						if (digit1 != -1 && digit2 != -1) {
+							char ch = static_cast<char>((digit1 << 4) | digit2);
+							output.append(1, ch);
+							i += 3;
+							continue;
+						}
+					} else if (str[i] == '+') {
+						output.append(1, ' ');
+						++i;
+					} else {
+						output.append(1, str[i]);
+						++i;
+					}
+				}
+				
+				return output;
+			};
+			
+			if (index == std::string::npos) {
+				undecoded_path = abspath;
+			} else {
+				undecoded_path = abspath.substr(0, index);
+				encoded_query = abspath.substr(index + 1);
+			}
+			
+			path = url_decode(undecoded_path);
+			
+			if (encoded_query.size() > 0) {
+				std::list<std::string> parts;
+				boost::split(parts, encoded_query,
+							 [] (char c) { return c == '&'; },
+							 boost::token_compress_on);
+				for (const auto& part: parts) {
+					std::string key, value;
+					index = part.find('=');
+					if (index == std::string::npos) {
+						key = part;
+					} else {
+						key = part.substr(0, index);
+						value = part.substr(index + 1);
+					}
+					
+					query.emplace_back(url_decode(key), url_decode(value));
+				}
+			}
+			
+		}
+		
+		std::string undecoded_path;
+		std::string path;
+		std::string encoded_query;
+		std::list<std::pair<std::string, std::string>> query;
+		
+	};
+	
+	enum class http_version
+	{
+		http_1_0, // Prohibited by WebSocket. Never used. [RFC blah 4.2.1]
+		http_1_1
+	};
+	
+	// Simple HTTP server that only accepts WebSocket.
+	template <class NextLayer>
+	class web_socket_server
+	{
+		enum class handshake_state_t
+		{
+			initial,
+			reading_header,
+			read_header,
+			sending_header,
+			done,
+			fail
+		};
+		
+	public:
+		using next_layer_type = typename std::remove_reference<NextLayer>::type;
+		using lowest_layer_type = typename next_layer_type::lowest_layer_type;
+		
+		next_layer_type& next_layer() { return next_; }
+		lowest_layer_type& lowest_layer() { return next_layer().lowest_layer(); }
+		
+		struct content_stream
+		{
+			using next_layer_type = web_socket_server::next_layer_type;
+			using lowest_layer_type = web_socket_server::lowest_layer_type;
+			next_layer_type& next_layer() { return server.next_layer(); }
+			lowest_layer_type& lowest_layer() { return server.lowest_layer(); }
+			
+			web_socket_server &server;
+			content_stream(web_socket_server &server) : server(server)
+			{ }
+			
+			template <class MutableBufferSequence, class Callback>
+			void async_read_some(const MutableBufferSequence& buffers, Callback&& cb);
+			template <class ConstBufferSequence, class Callback>
+			void async_write_some(const ConstBufferSequence& buffers, Callback&& cb);
+		};
+		
+		using socket_type = web_socket<content_stream&>;
+		
+		template <class ...Args>
+		web_socket_server(Args &&...args) :
+		next_(std::forward<Args>(args)...),
+		content_stream_(*this),
+		socket_(content_stream_),
+		streambuf_(1024) { }
+		
+		socket_type& socket() { return socket_; }
+		
+		http_version http_version() { return http_version_; }
+		const http_absolue_path& http_absolute_path() const { return http_absolute_path_; }
+		const std::string& host() const { return http_host_; }
+		const std::string& origin() const { return http_origin_; }
+		
+		bool handshake_done() const { return handshake_state_ == handshake_state_t::done; }
+		
+		template <class Callback>
+		void async_start_handshake(Callback&&);
+		
+		template <class Callback>
+		void async_accept(const std::string &protocol, Callback&&);
+		
+	private:
+		NextLayer next_;
+		content_stream content_stream_;
+		socket_type socket_;
+		handshake_state_t handshake_state_ = handshake_state_t::initial;
+		boost::asio::streambuf streambuf_;
+		std::vector<char> buffer_;
+		std::string const separator_ { "\r\n" };
+		
+		bool reading_request_line_ = true;
+		
+		enum http_version http_version_;
+		http_absolue_path http_absolute_path_;
+		std::string http_host_;
+		std::string http_origin_;
+		bool http_upgrade_valid_ = false;
+		bool http_connection_valid_ = false;
+		std::string http_sec_websocket_key_;
+		std::string http_sec_websocket_protocol_;
+		std::string http_sec_websocket_version_;
+		std::size_t http_header_total = 0;
+	
+		template <class Callback>
+		class start_handshake_op;
+		
+		template <class Callback>
+		class accept_op;
+	};
+	
+	template <class NextLayer>
+	template <class MutableBufferSequence, class Callback>
+	void web_socket_server<NextLayer>::content_stream::
+	async_read_some(const MutableBufferSequence& buffers, Callback&& cb)
+	{
+		if (server.handshake_state_ != handshake_state_t::done) {
+			cb(make_error_code(boost::system::errc::not_connected), 0);
+			return;
+		}
+		
+		server.next_layer().async_read_some(buffers, std::forward<Callback>(cb));
+	}
+	
+	template <class NextLayer>
+	template <class ConstBufferSequence, class Callback>
+	void web_socket_server<NextLayer>::content_stream::
+	async_write_some(const ConstBufferSequence& buffers, Callback&& cb)
+	{
+		if (server.handshake_state_ != handshake_state_t::done) {
+			cb(make_error_code(boost::system::errc::not_connected), 0);
+			return;
+		}
+		
+		server.next_layer().async_write_some(buffers, std::forward<Callback>(cb));
+	}
+	
+	namespace detail
+	{
+		struct web_socket_server_regex_t
+		{
+			std::string const method_ { "(OPTIONS|GET|HEAD|POST|PUT|DELETE|TRACE|CONNECT)" };
+			std::string const request_uri_ { "(\\*|(?:[a-z0-9]+\\:\\/*[^/]+)?\\/[^ ]*)" }; // "authority" format is not included
+			std::string const http_version_ { "HTTP/([0-9]{1,4})\\.([0-9]{1,4})" };
+			std::regex const requestLineRegex
+			{ method_ + " " + request_uri_ + " " + http_version_,
+				std::regex_constants::optimize | std::regex_constants::icase };
+			std::regex const absoluteUriRegex
+			{ "[a-z0-9]+\\:\\/*[^/]+(\\/[^ ]*)",
+				std::regex_constants::optimize | std::regex_constants::icase };
+		};
+		
+		static web_socket_server_regex_t web_socket_server_regex_;
+		const web_socket_server_regex_t& web_socket_server_regex()
+		{ return web_socket_server_regex_; }
+	}
+	
+	template <class NextLayer>
+	template <class Callback>
+	class web_socket_server<NextLayer>::start_handshake_op :
+	public detail::intermediate_op<Callback>
+	{
+		web_socket_server& parent;
+	public:
+		start_handshake_op(web_socket_server& parent, const Callback& cb):
+		detail::intermediate_op<Callback>(cb),
+		parent(parent) { }
+		start_handshake_op(web_socket_server& parent, Callback&& cb):
+		detail::intermediate_op<Callback>(cb),
+		parent(parent) { }
+		
+		void operator () (const boost::system::error_code &error, std::size_t count = 0)
+		{
+			if (error) {
+				// TODO: raise "Request URI Too Long" when URI is too long?
+				parent.handshake_state_ = handshake_state_t::fail;
+				this->callback(error);
+				return;
+			} else if (count < 2) {
+				parent.handshake_state_ = handshake_state_t::fail;
+				this->callback(make_error_code(boost::system::errc::protocol_error));
+				return;
+			}
+			
+			auto& buf = parent.buffer_;
+			buf.resize(count);
+			std::istream stream(&parent.streambuf_);
+			stream.read(buf.data(), count);
+			std::string s(buf.data(), buf.size() - 2);
+			
+			parent.http_header_total += count;
+			if (parent.http_header_total > 65536 * 2) {
+				// Limit HTTP header size to prevent DoS.
+				this->callback(make_error_code(boost::system::errc::not_supported));
+				return;
+			}
+			
+			if (parent.reading_request_line_) {
+				// HTTP Requset Line
+				if (s.size() == 0) {
+					// Empty request line.
+					parent.handshake_state_ = handshake_state_t::fail;
+					this->callback(make_error_code(boost::system::errc::protocol_error));
+					return;
+				}
+				
+				std::smatch matches;
+				if (!std::regex_match(s, matches, detail::web_socket_server_regex().requestLineRegex)) {
+					// Unrecognizable request line.
+					parent.handshake_state_ = handshake_state_t::fail;
+					this->callback(make_error_code(boost::system::errc::protocol_error));
+					return;
+				}
+				
+				assert(matches.size() == 5);
+				
+				// Check HTTP-Version.
+				if (matches[2].str() == "1") {
+					if (matches[3].str() == "0") {
+						parent.http_version_ = http_version::http_1_0;
+					} else if (matches[3].str() == "1") {
+						parent.http_version_ = http_version::http_1_1;
+					} else {
+						goto unsupportedHttpVersion;
+					}
+				} else {
+					// Unsupported HTTP version.
+				unsupportedHttpVersion:
+					parent.handshake_state_ = handshake_state_t::fail;
+					this->callback(make_error_code(boost::system::errc::protocol_error));
+					return;
+				}
+				
+				// Check Method.
+				const auto& httpMethod = matches[1].str();
+				if (!boost::iequals(httpMethod, "GET")) {
+					// Unsupported method.
+					parent.handshake_state_ = handshake_state_t::fail;
+					this->callback(make_error_code(boost::system::errc::protocol_error));
+					return;
+				}
+				
+				// Check Request-URI.
+				auto requestUri = matches[2].str();
+				
+				if (requestUri == "*" || requestUri.size() == 0) {
+					// Invalid Request-URI.
+					parent.handshake_state_ = handshake_state_t::fail;
+					this->callback(make_error_code(boost::system::errc::protocol_error));
+					return;
+				}
+				
+				if (requestUri[0] != '/') {
+					// absoluteURI. Convert to abs_path.
+					if (!std::regex_match(requestUri, matches, detail::web_socket_server_regex().absoluteUriRegex)) {
+						// Failed (this is unlikely to happen)
+						parent.handshake_state_ = handshake_state_t::fail;
+						this->callback(make_error_code(boost::system::errc::protocol_error));
+						return;
+					}
+					
+					requestUri = matches[1].str();
+				}
+				
+				parent.http_absolute_path_ = http_absolue_path(requestUri);
+				
+				parent.reading_request_line_ = false;
+			} else if (s.empty()) {
+				// End of the HTTP Request.
+				// Validate the header.
+				
+				if (parent.http_version_ == http_version::http_1_0) {
+					// HTTP 1.0 is prohibited by [RFC 4.2.1].
+					parent.handshake_state_ = handshake_state_t::fail;
+					this->callback(make_error_code(boost::system::errc::protocol_error));
+					return;
+				}
+				
+				if (parent.http_version_ == http_version::http_1_1 &&
+					parent.http_host_.empty()) {
+					// HTTP 1.1 mandates Host header.
+					parent.handshake_state_ = handshake_state_t::fail;
+					this->callback(make_error_code(boost::system::errc::protocol_error));
+					return;
+				}
+				
+				if (!parent.http_upgrade_valid_ ||
+					!parent.http_connection_valid_) {
+					parent.handshake_state_ = handshake_state_t::fail;
+					this->callback(make_error_code(boost::system::errc::not_supported));
+					return;
+				}
+				
+				if (parent.http_sec_websocket_key_.size() != 24) {
+					// Sec-WebSocket-Key must be 24 bytes long.
+					parent.handshake_state_ = handshake_state_t::fail;
+					this->callback(make_error_code(boost::system::errc::not_supported));
+					return;
+				}
+				
+				if (parent.http_sec_websocket_version_ != "13") {
+					parent.handshake_state_ = handshake_state_t::fail;
+					this->callback(make_error_code(boost::system::errc::not_supported));
+					return;
+				}
+				
+				// Validated.
+				parent.handshake_state_ = handshake_state_t::read_header;
+				this->callback(boost::system::error_code());
+				
+			} else {
+				// HTTP Header
+				
+				// Make sure there's no line continuation.
+				// (If header contains a quoted-string, it might span
+				//  across the lines. Might be HTTP injection attack.)
+				{
+					bool quot = false;
+					for (std::size_t i = 0; i < s.size(); ) {
+						if (quot) {
+							if (s[i] == '"') {
+								quot = false;
+							} else if (s[i] == '\\') {
+								i += 2;
+							}
+						} else {
+							if (s[i] == '"') {
+								quot = true;
+							}
+						}
+					}
+					
+					if (quot) {
+						// quoted-string spanning across the lines.
+						parent.handshake_state_ = handshake_state_t::fail;
+						this->callback(make_error_code(boost::system::errc::not_supported));
+						return;
+					}
+				}
+			
+				auto index = s.find(':');
+				auto name = s.substr(0, index);
+				auto value = s.substr(index + 1);
+				boost::trim(name);
+				boost::trim(value);
+				
+				if (boost::iequals(name, "Host")) {
+					parent.http_host_ = value;
+				} else if (boost::iequals(name, "Upgrade")) {
+					parent.http_upgrade_valid_ = boost::iequals(value, "websocket");
+				} else if (boost::iequals(name, "Connection")) {
+					parent.http_connection_valid_ = boost::iequals(value, "Upgrade");
+				} else if (boost::iequals(name, "Origin")) {
+					parent.http_origin_ = value;
+				} else if (boost::iequals(name, "Sec-WebSocket-Version")) {
+					parent.http_sec_websocket_version_ = value;
+				} else if (boost::iequals(name, "Sec-WebSocket-Key")) {
+					parent.http_sec_websocket_key_ = value;
+				} else if (boost::iequals(name, "Sec-WebSocket-Protocol")) {
+					parent.http_sec_websocket_protocol_ = value;
+				} else {
+					// Ignore for now...
+				}
+			}
+			
+		}
+		
+		void perform()
+		{
+			_asio::async_read_until(parent.next_layer(), parent.streambuf_,
+									parent.separator_, std::move(*this));
+		}
+	};
+	
+	template <class NextLayer>
+	template <class Callback>
+	void web_socket_server<NextLayer>::async_start_handshake(Callback &&cb)
+	{
+		start_handshake_op<typename std::remove_reference<Callback>::type>
+		op(*this, std::forward<Callback>(cb));
+		op.perform();
+	}
+	
+	
+	template <class NextLayer>
+	template <class Callback>
+	class web_socket_server<NextLayer>::accept_op :
+	public detail::intermediate_op<Callback>
+	{
+		web_socket_server& parent;
+		std::shared_ptr<std::string> buffer;
+	public:
+		accept_op(web_socket_server& parent, const Callback& cb):
+		detail::intermediate_op<Callback>(cb),
+		parent(parent) { }
+		accept_op(web_socket_server& parent, Callback&& cb):
+		detail::intermediate_op<Callback>(cb),
+		parent(parent) { }
+		
+		void operator () (const boost::system::error_code &error, std::size_t count)
+		{
+			if (error) {
+				parent.handshake_state_ = handshake_state_t::fail;
+				this->callback(error);
+				return;
+			} else if (count < buffer->size()) {
+				parent.handshake_state_ = handshake_state_t::fail;
+				this->callback(make_error_code(boost::system::errc::protocol_error));
+				return;
+			}
+			
+			parent.handshake_state_ = handshake_state_t::done;
+			this->callback(boost::system::error_code());
+		}
+		
+		void perform(const std::string& protocol)
+		{
+			std::ostringstream s;
+			s << "HTTP/1.1 101 Switching Protocols\r\n";
+			s << "Upgrade: websocket\r\n";
+			s << "Connection: Upgrade\r\n";
+			s << "Sec-WebSocket-Protocol: " << protocol << "\r\n";
+			s << "Sec-WebSocket-Accept: " << "hoge" << "\r\n"; // TODO: Sec-WebSocket-Accept
+			s << "\r\n";
+			buffer = std::make_shared<std::string>(s.str());
+			
+			_asio::async_write(parent.next_level(),
+							   _asio::buffer(buffer->data(), buffer->size()),
+							   std::move(*this));
+		}
+	};
+	
+	template <class NextLayer>
+	template <class Callback>
+	void web_socket_server<NextLayer>::async_accept
+	(const std::string &protocl, Callback &&cb)
+	{
+		handshake_state_ = handshake_state_t::sending_header;
+		
+		accept_op<typename std::remove_reference<Callback>::type>
+		op(*this, std::forward<Callback>(cb));
+		op.perform();
+	}
+	
 	
 }
