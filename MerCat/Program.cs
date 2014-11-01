@@ -47,6 +47,10 @@ namespace Merlion.MerCat
 		{
 			cmdArgs = new CommandLineArguments (args);
 
+			ServicePointManager.ServerCertificateValidationCallback += (sender, certificate, chain, sslPolicyErrors) => {
+				return true;
+			};
+
 			switch (cmdArgs.Mode.Value) {
 			case RunMode.NetCat:
 				DoNetCat ();
@@ -179,40 +183,30 @@ namespace Merlion.MerCat
 		static void DoNetCat()
 		{
 			var client = new MerlionClient (cmdArgs.Address);
+
+			client.Error += (sender, e) => {
+				Console.Error.WriteLine(e.Exception.ToString());
+				Environment.Exit(0);
+			};
+
+			var outstream = Console.OpenStandardOutput ();
+			client.Received += (sender, e) => outstream.Write (e.Data, 0, e.Data.Length);
+
 			client.Connect ();
 
-			new Thread (() => DoWrite (client)).Start ();
-
-			byte[] buffer = new byte[65536];
-			var outstream = Console.OpenStandardOutput ();
-			var instream = client.Stream;
-
-			while (true) {
-				int readCount = instream.Read (buffer, 0, buffer.Length);
-				if (readCount > 0) {
-					outstream.Write (buffer, 0, readCount);
-					outstream.Flush ();
-				} else {
-					return;
-				}
-			}
-		}
-
-		static void DoWrite(MerlionClient client)
-		{
 			byte[] buffer = new byte[65536];
 			var instream = Console.OpenStandardInput ();
-			var outstream = client.Stream;
 
 			while (true) {
 				int readCount = instream.Read (buffer, 0, buffer.Length);
 				if (readCount > 0) {
-					outstream.Write (buffer, 0, readCount);
+					client.Send (buffer, 0, buffer.Length);
 				} else {
 					return;
 				}
 			}
 		}
+
 	}
 
 	sealed class CommandLineArguments

@@ -18,6 +18,8 @@ using System;
 using log4net;
 using System.Collections.Generic;
 using System.Runtime.Remoting.Lifetime;
+using System.Threading.Tasks;
+using System.Threading;
 
 namespace Merlion.Server
 {
@@ -40,7 +42,7 @@ namespace Merlion.Server
 
 		AppDomain appDomain;
 		ApplicationServer appServer;
-		Utils.PipeStreamFactory pipeFactory;
+		MerlionClientImplFactory clientFactory;
 
 		readonly string name;
 
@@ -77,7 +79,7 @@ namespace Merlion.Server
 
 				var args = new object[] {new ServerNodeImpl(this)};
 				appServer = (ApplicationServer)
-					appDomain.CreateInstanceAndUnwrap ("Merlion", 
+					appDomain.CreateInstanceAndUnwrap ("MerlionFramework", 
 						typeof(ApplicationServer).FullName, false,
 						System.Reflection.BindingFlags.CreateInstance, null,
 						args, 
@@ -89,13 +91,13 @@ namespace Merlion.Server
 
 				appServer.Start();
 
-				log.DebugFormat ("{0}: Creating PipeStreamFactory.", name);
-				pipeFactory = (Utils.PipeStreamFactory)
+				log.DebugFormat ("{0}: Creating MerlionClientImplFactory.", name);
+				clientFactory = (MerlionClientImplFactory)
 					appDomain.CreateInstanceAndUnwrap(
-						typeof(Utils.PipeStreamFactory).Assembly.FullName,
-						typeof(Utils.PipeStreamFactory).FullName);
+						typeof(MerlionClientImplFactory).Assembly.FullName,
+						typeof(MerlionClientImplFactory).FullName);
 
-				sponsor.Register(pipeFactory);
+				sponsor.Register(clientFactory);
 
 			} catch (Exception ex) {
 				try { Dispose (); }
@@ -104,19 +106,6 @@ namespace Merlion.Server
 				}
 				throw new DomainCreationException (ex);
 			}
-		}
-
-		public void Accept(long clientId, Utils.PipeStream pipe, byte[] roomId)
-		{
-			MerlionRoomImpl room;
-			lock (rooms) {
-				rooms.TryGetValue(roomId, out room);
-			}
-
-			pipe = pipeFactory.CreateWithHandle (pipe.OtherEndHandle);
-
-			appServer.Accept(new MerlionClientImpl(clientId, pipe),
-				room);
 		}
 
 		Dictionary<long, MerlionClientImpl> clientsToSetup = 
@@ -138,15 +127,22 @@ namespace Merlion.Server
 			}
 		}
 
-		public bool SetupClient(long clientId, NativeServerInterop.ClientSetup setup)
+		public bool SetupClient(long clientId, NativeServerInterop.ClientSocket socket)
 		{
 			lock (clientsToSetup) {
 				MerlionClientImpl cli;
 				if (clientsToSetup.TryGetValue(clientId, out cli)) {
-					var handle = new Utils.MonoPipeStreamEndpoint ();
-					handle.ReadingHandle = setup.ReadFileDescriptor;
-					handle.WritingHandle = setup.WriteFileDescriptor;
-					cli.Setup (pipeFactory.CreateWithHandle(handle));
+					var handle = socket.SafeHandle;
+					var h = handle.DangerousGetHandle ();
+					handle.SetHandleAsInvalid ();
+
+					try {
+						cli.Setup (h);
+					} catch (System.Runtime.Remoting.RemotingException) {
+						// Oops
+						new NativeServerInterop.MSCClientSocketSafeHandle (h, true);
+						throw;
+					}
 
 					clientsToSetup.Remove (clientId);
 					return true;
@@ -175,10 +171,10 @@ namespace Merlion.Server
 					"{0}: Exception thrown while unregistering ApplicationServer from ClientSponsor. Ignoring.", name), ex);
 			}
 			try {
-				sponsor.Unregister(pipeFactory);
+				sponsor.Unregister(clientFactory);
 			} catch (Exception ex) {
 				log.Warn (string.Format (
-					"{0}: Exception thrown while unregistering PipeStreamFactory from ClientSponsor. Ignoring.", name), ex);
+					"{0}: Exception thrown while unregistering MerlionClientImplFactory from ClientSponsor. Ignoring.", name), ex);
 			}
 			if (appServer != null) {
 				try {
@@ -253,35 +249,69 @@ namespace Merlion.Server
 			}
 		}
 
+		sealed class MerlionClientImplFactory: MarshalByRefObject
+		{
+			public MerlionClientImpl CreateClient(long clientId)
+			{
+				return new MerlionClientImpl (clientId);
+			}
+		}
+
 		sealed class MerlionClientImpl: MerlionClient
 		{
+			static readonly ILog log = LogManager.GetLogger(typeof(MerlionClientImpl));
+
+			NativeServerInterop.ClientSocket socket;
 			readonly long clientId;
-			System.IO.Stream stream;
 			readonly System.Threading.EventWaitHandle readyEvent =
 				new System.Threading.EventWaitHandle (false,
 					System.Threading.EventResetMode.ManualReset);
+			readonly object sync = new object();
+			readonly NativeServerInterop.ClientSocket.ReceiveCallbackDelegate receiveDelegate;
 
-			public MerlionClientImpl(long clientId, System.IO.Stream stream)
-			{
-				this.stream = stream;
-				this.clientId = clientId;
-				readyEvent.Set();
-			}
 			public MerlionClientImpl(long clientId)
 			{
 				this.clientId = clientId;
+				this.receiveDelegate = HandleReceive;
 			}
 
-			public void Setup(System.IO.Stream stream)
+			public void Setup(IntPtr stream)
 			{
-				this.stream = stream;
-				readyEvent.Set ();
+				lock (sync) {
+					socket = new NativeServerInterop.ClientSocket (stream);
+					readyEvent.Set ();
+					socket.Receive (receiveDelegate);
+				}
+			}
+
+			void HandleReceive (byte[] data, Exception error)
+			{
+				if (error != null) {
+					log.Debug ("Exception while receiving a packet.", error);
+					Close ();
+				} else {
+					try {
+						OnReceived(new ReceiveEventArgs(data));
+					} catch (Exception ex) {
+						log.Error ("Unhandled exception thrown in one of receive handlers.", ex);
+						Close ();
+					}
+
+					lock (sync) {
+						if (socket == null) {
+							return;
+						}
+						socket.Receive (receiveDelegate);
+					}
+				}
 			}
 
 			public void Discard()
 			{
-				stream = new Utils.InvalidStream ();
-				readyEvent.Set ();
+				lock (sync) {
+					readyEvent.Set ();
+				}
+				Close ();
 			}
 
 			public override long ClientId {
@@ -290,12 +320,120 @@ namespace Merlion.Server
 				}
 			}
 
-			public override System.IO.Stream Stream {
-				get {
-					readyEvent.WaitOne ();
-					return stream;
+			public override void Close ()
+			{
+				readyEvent.WaitOne ();
+
+				lock (sync) {
+					var s = Interlocked.Exchange (ref socket, null);
+					if (s != null)
+						s.Dispose ();
 				}
 			}
+
+			public override void Send (byte[] data, int offset, int length)
+			{
+				EndSend (BeginSend (data, offset, length, (cb)=>{}, null));
+			}
+
+			class SendResult: IAsyncResult
+			{
+				readonly MerlionClientImpl client;
+				readonly byte[] data;
+				readonly int offset;
+				readonly int length;
+				readonly ManualResetEvent waitHandle = new ManualResetEvent(false);
+				readonly object state;
+				readonly AsyncCallback callback;
+				bool completed = false;
+				Exception exception;
+				bool doneSynchronously = true;
+
+				public SendResult(MerlionClientImpl client, byte[] data, int offset, int length, AsyncCallback callback, object state)
+				{
+					this.client = client;
+					this.state = state;
+					this.data = data;
+					this.offset = offset;
+					this.length = length;
+					this.callback = callback;
+
+					client.readyEvent.WaitOne(); // should be soon...
+
+					try {
+						lock (client.sync) {
+							if (client.socket == null) {
+								throw new System.IO.IOException("Connection is down.");
+							}
+
+							client.socket.Send (data, offset, length, Done);
+						}
+					} catch (Exception ex) {
+						Done(ex);
+						return;
+					}
+
+					doneSynchronously = false;
+				}
+
+				void Done(Exception ex)
+				{
+					exception = ex;
+					completed = true;
+					waitHandle.Set();
+					callback(this);
+				}
+
+				public object AsyncState {
+					get {
+						return state;
+					}
+				}
+
+				public WaitHandle AsyncWaitHandle {
+					get {
+						return waitHandle;
+					}
+				}
+
+				public bool CompletedSynchronously {
+					get {
+						return doneSynchronously;
+					}
+				}
+
+				public bool IsCompleted {
+					get {
+						return completed;
+					}
+				}
+
+				public void End()
+				{
+					waitHandle.WaitOne ();
+
+					if (exception != null) {
+						throw exception;
+					}
+				}
+			}
+
+			public override IAsyncResult BeginSend(byte[] data, int offset, int length, AsyncCallback callback, object asyncState)
+			{
+				return new SendResult (this, data, offset, length, callback, asyncState);
+			}
+
+			public override void EndSend(IAsyncResult result)
+			{
+				if (result == null)
+					throw new ArgumentNullException ("result");
+				var r = (SendResult)result;
+				r.End ();
+			}
+
+			// TODO: public override async Task SendAsync (byte[] data, int offset, int length)
+
+
 		}
 
 		sealed class ServerNodeImpl: ServerNode

@@ -136,17 +136,13 @@ extern "C" {
 	typedef std::uint32_t (*MSCLoadVersionCallback)
 	(const char *versionName, void *userdata);
 	
-	struct MSCClientSetup
-	{
-		int readStream;
-		int writeStream;
-	};
+	typedef void *MSCClientSocket;
 	
 	typedef std::uint32_t (*MSCAcceptClientCallback)
 	(std::uint64_t clientId, const char *version, const char *room, std::int32_t roomNameLen, void *userdata);
 	
 	typedef std::uint32_t (*MSCSetupClientCallback)
-	(std::uint64_t clientId, const MSCClientSetup *setup, void *userdata);
+	(std::uint64_t clientId, MSCClientSocket socket, void *userdata);
 	
 	typedef std::uint32_t (*MSCDiscardClientCallback)
 	(std::uint64_t clientId, void *userdata);
@@ -197,6 +193,20 @@ extern "C" {
 	extern MSCResult MSCNodeUnbindRoom(MSCNode node, const char *room,
 									   std::int32_t roomNameLen);
 	extern MSCResult MSCNodeForwardLog(MSCNode node, const MSCLogEntry *entry);
+		
+	typedef std::uint32_t (*MSCClientSocketReceiveCallback)
+	(const void *data, std::uint32_t dataLength, const char *error, void *userdata);
+	typedef std::uint32_t (*MSCClientSocketSendCallback)
+	(const char *error, void *userdata);
+		
+	extern MSCResult MSCClientSocketDestroy(MSCClientSocket socket);
+	extern MSCResult MSCClientSocketReceive(MSCClientSocket socket,
+											MSCClientSocketReceiveCallback callback,
+											void *userdata);
+	extern MSCResult MSCClientSocketSend(MSCClientSocket socket,
+										 const void *data, std::uint32_t dataLength,
+										 MSCClientSocketSendCallback callback,
+										 void *userdata);
 	
 #ifdef __cplusplus
 };

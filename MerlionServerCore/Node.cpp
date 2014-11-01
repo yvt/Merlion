@@ -26,6 +26,7 @@
 #include "Version.h"
 #include "Library.hpp"
 #include "NodeVersionManager.hpp"
+#include "NodeClientSocket.hpp"
 
 namespace asio = boost::asio;
 using boost::format;
@@ -120,11 +121,8 @@ namespace mcore
 		}
 		auto *setupClientCallback = param.setupClientCallback;
 		auto *setupClientCallbackData = param.setupClientCallbackUserData;
-		setupClientFunction = [=](std::uint64_t clientId, const ClientSetup& setup) {
-			MSCClientSetup set;
-			set.readStream = setup.readStream;
-			set.writeStream = setup.writeStream;
-			if (setupClientCallback(clientId, &set, setupClientCallbackData)) {
+		setupClientFunction = [=](std::uint64_t clientId, const std::shared_ptr<NodeClientSocket>& setup) {
+			if (setupClientCallback(clientId, setup->createHandle(), setupClientCallbackData)) {
 				MSCThrow(InvalidOperationException("Setting client up failed."));
 			}
 		};

@@ -21,11 +21,7 @@
 
 namespace mcore
 {
-	struct ClientSetup
-	{
-		int readStream;
-		int writeStream;
-	};
+	class NodeClientSocket;
 	
 	struct NodeParameters
 	{
@@ -37,7 +33,7 @@ namespace mcore
 		std::function<void(const std::string&)> loadVersionFunction;
 		std::function<void(const std::string&)> unloadVersionFunction;
 		std::function<void(std::uint64_t, const std::string&, const std::string&)> acceptClientFunction;
-		std::function<void(std::uint64_t, const ClientSetup&)> setupClientFunction;
+		std::function<void(std::uint64_t, const std::shared_ptr<NodeClientSocket>&)> setupClientFunction;
 		std::function<void(std::uint64_t)> destroyClientFunction;
 		std::function<void()> failureFunction;
 		

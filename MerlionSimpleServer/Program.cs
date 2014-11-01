@@ -124,10 +124,14 @@ namespace Merlion.SimpleServer
 				}
 			}
 
-			public override System.IO.Stream Stream {
-				get {
-					return stream;
-				}
+			public override void Close ()
+			{
+				throw new NotImplementedException ();
+			}
+
+			public override void Send (byte[] data, int offset, int length)
+			{
+				throw new NotImplementedException ();
 			}
 		}
 
@@ -152,6 +156,8 @@ namespace Merlion.SimpleServer
 		void Service()
 		{
 			try {
+				// TODO: switch to WebSocket
+
 				log.Debug("Performing SSL Handshake.");
 
 				ssl = new SslStream(tcpStream, false);

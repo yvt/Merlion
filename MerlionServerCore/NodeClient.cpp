@@ -21,6 +21,7 @@
 #include "Library.hpp"
 #include "Exceptions.hpp"
 #include "AsyncPipe.hpp"
+#include "NodeClientSocket.hpp"
 
 using boost::format;
 namespace asio = boost::asio;
@@ -37,14 +38,14 @@ namespace mcore
 	state(State::NotAccepted),
 	room(room),
 	masterSocket(domain->node().library()->ioService()),
-	upSocket(domain->node().library()->ioService()),
-	downSocket(domain->node().library()->ioService()),
-	upPipe {0, 0},
-	downPipe {0, 0},
+	appSocket(domain->node().library()->ioService()),
+	pipe {0, 0},
 	_strand {domain->node().library()->ioService()},
-	closed {false}
+	closed {false},
+	library {domain->node().library()},
+	displayName {str(format("Client:%d") % clientId)}
 	{
-		log.setChannel(str(format("Client:%d") % clientId));
+		log.setChannel(displayName);
 	}
 	
 	bool NodeClient::accept()
@@ -186,21 +187,16 @@ namespace mcore
 				
 				BOOST_LOG_SEV(log, LogLevel::Debug) << "Creating UNIX pipes.";
 				
-				if (socketpair(AF_UNIX, SOCK_STREAM, 0, upPipe))
-					throw SystemErrorException(str(format("Error while creating upstream pipe.: %d") % errno));
-				if (socketpair(AF_UNIX, SOCK_STREAM, 0, downPipe))
-					throw SystemErrorException(str(format("Error while creating downstream pipe.: %d") % errno));
+				if (socketpair(AF_UNIX, SOCK_STREAM, 0, pipe))
+					throw SystemErrorException(str(format("Error while creating pipe.: %d") % errno));
 				
-				upSocket.assign(pipes(), upPipe[0]);
-				upPipe[0] = 0; // ownership moved
-				downSocket.assign(pipes(), downPipe[1]);
-				downPipe[1] = 0; // ownership moved
+				appSocket.assign(pipes(), pipe[0]);
+				pipe[0] = 0; // ownership moved
 				
-				ClientSetup setup;
-				setup.readStream = downPipe[0];
-				setup.writeStream = upPipe[1];
-				
-				setupFunc(clientId(), setup);
+				// Create client socket
+				auto csock = std::make_shared<NodeClientSocket>(library, displayName, pipe[1]);
+				pipe[1] = 0; // ownership moved
+				setupFunc(clientId(), csock);
 				
 				state = State::Servicing;
 				startService();
@@ -220,13 +216,10 @@ namespace mcore
 					onConnectionRejected(self);
 				}
 				
-				if (upPipe[0]) close(upPipe[0]);
-				if (upPipe[1]) close(upPipe[1]);
-				if (downPipe[0]) close(downPipe[0]);
-				if (downPipe[1]) close(downPipe[1]);
+				if (pipe[0]) close(pipe[0]);
+				if (pipe[1]) close(pipe[1]);
 				
-				if (upSocket.is_open()) upSocket.close();
-				if (downSocket.is_open()) downSocket.close();
+				if (appSocket.is_open()) appSocket.close();
 				
 				try {
 					destroyFunc(clientId());
@@ -262,21 +255,21 @@ namespace mcore
 		
 		BOOST_LOG_SEV(log, LogLevel::Debug) << "Starting service.";
 		
-		startAsyncPipe(masterSocket, downSocket, 8192, _strand.wrap([this, self](const boost::system::error_code& error, std::uint64_t) {
+		startAsyncPipe(masterSocket, appSocket, 8192, _strand.wrap([this, self](const boost::system::error_code& error, std::uint64_t) {
 			if (error) {
-				BOOST_LOG_SEV(log, LogLevel::Debug) << "Downstream socket error.: " << error;
+				BOOST_LOG_SEV(log, LogLevel::Debug) << "Downstream stream error.: " << error;
 				terminateService();
 			} else {
-				try { downSocket.close(); } catch(...) { }
+				try { appSocket.close(); } catch(...) { }
 				socketDown();
 			}
 		}));
-		startAsyncPipe(upSocket, masterSocket, 8192, _strand.wrap([this, self](const boost::system::error_code& error, std::uint64_t) {
+		startAsyncPipe(appSocket, masterSocket, 8192, _strand.wrap([this, self](const boost::system::error_code& error, std::uint64_t) {
 			if (error) {
-				BOOST_LOG_SEV(log, LogLevel::Debug) << "Upstream socket error.: " << error;
+				BOOST_LOG_SEV(log, LogLevel::Debug) << "Upstream stream error.: " << error;
 				terminateService();
 			} else {
-				try { upSocket.close(); } catch(...) { }
+				try { appSocket.close(); } catch(...) { }
 				socketDown();
 			}
 		}));
@@ -286,8 +279,8 @@ namespace mcore
 	void NodeClient::socketDown()
 	{
 		auto self = shared_from_this();
-		if (!downSocket.is_open() && !upSocket.is_open()) {
-			BOOST_LOG_SEV(log, LogLevel::Debug) << "Both endpoint closed.";
+		if (!appSocket.is_open()) {
+			BOOST_LOG_SEV(log, LogLevel::Debug) << "Pipe closed.";
 			terminateService();
 		}
 	}
@@ -297,8 +290,7 @@ namespace mcore
 		auto self = shared_from_this();
 		//assert(state == State::Servicing);
 		
-		if (upSocket.is_open()) upSocket.close();
-		if (downSocket.is_open()) downSocket.close();
+		if (appSocket.is_open()) appSocket.close();
 		
 		try { masterSocket.shutdown(ip::tcp::socket::shutdown_both); } catch (...) { }
 		try { masterSocket.close(); } catch(...) { }

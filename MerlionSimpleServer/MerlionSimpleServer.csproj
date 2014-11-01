@@ -33,6 +33,24 @@
     <Reference Include="log4net">
       <HintPath>..\packages\log4net.2.0.3\lib\net40-full\log4net.dll</HintPath>
     </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>..\packages\Newtonsoft.Json.6.0.2\lib\net45\Newtonsoft.Json.dll</HintPath>
+    </Reference>
+    <Reference Include="SuperSocket.Common">
+      <HintPath>..\packages\SuperWebSocketNETServer.0.8\lib\net45\SuperSocket.Common.dll</HintPath>
+    </Reference>
+    <Reference Include="SuperSocket.Facility">
+      <HintPath>..\packages\SuperWebSocketNETServer.0.8\lib\net45\SuperSocket.Facility.dll</HintPath>
+    </Reference>
+    <Reference Include="SuperSocket.SocketBase">
+      <HintPath>..\packages\SuperWebSocketNETServer.0.8\lib\net45\SuperSocket.SocketBase.dll</HintPath>
+    </Reference>
+    <Reference Include="SuperSocket.SocketEngine">
+      <HintPath>..\packages\SuperWebSocketNETServer.0.8\lib\net45\SuperSocket.SocketEngine.dll</HintPath>
+    </Reference>
+    <Reference Include="SuperWebSocket">
+      <HintPath>..\packages\SuperWebSocketNETServer.0.8\lib\net45\SuperWebSocket.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Program.cs" />
@@ -47,6 +65,14 @@
     <ProjectReference Include="..\MerlionServerUtils\MerlionServerUtils.csproj">
       <Project>{E12D56B3-2392-4AA1-AC3E-38363C141C6B}</Project>
       <Name>MerlionServerUtils</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\MerlionFramework\MerlionFramework.csproj">
+      <Project>{63038769-6F7D-48FA-BBB9-100B367B9FCC}</Project>
+      <Name>MerlionFramework</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\MerlionClient\MerlionClient.csproj">
+      <Project>{0417807A-9A1E-4EA8-8D86-2E057B0CB9C4}</Project>
+      <Name>MerlionClient</Name>
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>

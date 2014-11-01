@@ -25,6 +25,7 @@
 #include "Utils.hpp"
 #include "Exceptions.hpp"
 #include "AsyncPipe.hpp"
+#include "WebSocket.hpp"
 
 namespace mcore
 {
@@ -45,6 +46,7 @@ namespace mcore
 		using strandType = boost::asio::strand;
 		using ptr = std::shared_ptr<MasterClient>;
 		using ioMutexType = std::recursive_mutex;
+		using webSocketServerType = asiows::web_socket_server<sslSocketType&>;
     private:
         friend class Master;
 		friend class MasterClientResponse;
@@ -67,6 +69,7 @@ namespace mcore
 
         boost::asio::ssl::context& sslContext;
         sslSocketType sslSocket;
+		webSocketServerType webSocketServer;
 		
 		std::weak_ptr<BaseMasterClientHandler> handler;
         
@@ -77,14 +80,12 @@ namespace mcore
 		std::unique_ptr<LikeMatcher> versionRequest;
 		
         void handshakeDone(const boost::system::error_code&);
-		
-		template <class Callback>
-		void respondStatus(ClientResponse resp, Callback callback);
+		void rejectHandshake(int);
 		
 		void connectionApproved(std::function<std::shared_ptr<BaseMasterClientHandler>()> onsuccess,
 								std::function<void()> onfail,
 								const std::string& version);
-		void connectionRejected();
+		void connectionRejected(int);
 		
 		
     public:
@@ -125,7 +126,7 @@ namespace mcore
 		void accept(std::function<std::shared_ptr<BaseMasterClientHandler>()> onsuccess,
 					std::function<void()> onfail,
 					const std::string& version);
-		void reject(const std::string& reason);
+		void reject(const std::string& reason, int statusCode = asiows::http_status_codes::service_unavailable);
 		
 		bool isResponded();
 		
@@ -202,6 +203,8 @@ namespace mcore
 			auto self = this->shared_from_this();
 			std::shared_ptr<ClientInputOutput> io
 			(new ClientInputOutput(client));
+			
+			// Pass-through WebSocket packets.
 			
 			// Start downstream
 			startAsyncPipe(*io, *baseHandler, 4096, [self, this, client, io] (const boost::system::error_code& error, std::size_t count) {

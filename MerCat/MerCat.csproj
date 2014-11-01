@@ -48,5 +48,9 @@
       <Project>{E12D56B3-2392-4AA1-AC3E-38363C141C6B}</Project>
       <Name>MerlionServerUtils</Name>
     </ProjectReference>
+    <ProjectReference Include="..\MerlionClient\MerlionClient.csproj">
+      <Project>{0417807A-9A1E-4EA8-8D86-2E057B0CB9C4}</Project>
+      <Name>MerlionClient</Name>
+    </ProjectReference>
   </ItemGroup>
 </Project>

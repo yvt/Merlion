@@ -184,12 +184,6 @@ namespace Merlion.Server
 		delegate uint MSCLoadVersionCallback
 		(string versionName, IntPtr userdata);
 
-		struct MSCClientSetup
-		{
-			public int readStream;
-			public int writeStream;
-		}
-
 		delegate uint MSCAcceptClientCallback(
 			ulong clientId,
 			[MarshalAs(UnmanagedType.LPStr)] string version,
@@ -199,7 +193,7 @@ namespace Merlion.Server
 
 		delegate uint MSCSetupClientCallback(
 			ulong clientId,
-			ref MSCClientSetup setup,
+			IntPtr clientSocket,
 			IntPtr userdata);
 
 		delegate uint MSCDiscardClientCallback(
@@ -293,6 +287,22 @@ namespace Merlion.Server
 		static extern MSCResult MSCNodeUnbindRoom (
 			MSCNodeSafeHandle node, IntPtr room, int roomNameLen);
 
+		delegate uint MSCClientSocketReceiveCallback (
+			IntPtr data, int dataLength, string error, IntPtr userdata);
+		delegate uint MSCClientSocketSendCallback (
+			string error, IntPtr userdata);
+
+
+		[DllImport("MerlionServerCore")]
+		static extern MSCResult MSCClientSocketDestroy(IntPtr socket);
+		[DllImport("MerlionServerCore")]
+		static extern MSCResult MSCClientSocketReceive(MSCClientSocketSafeHandle socket,
+			MSCClientSocketReceiveCallback callback, IntPtr userdata);
+		[DllImport("MerlionServerCore")]
+		static extern MSCResult MSCClientSocketSend(MSCClientSocketSafeHandle socket,
+			IntPtr data, int dataLength,
+			MSCClientSocketSendCallback callback, IntPtr userdata);
+
 		static unsafe string GetLastError()
 		{
 			IntPtr msg = MSCGetLastErrorMessage ();
@@ -384,6 +394,23 @@ namespace Merlion.Server
 			public MSCNodeSafeHandle(bool ownsHandle):
 			base(ownsHandle) { }
 			public MSCNodeSafeHandle(IntPtr preexistingHandle, bool ownsHandle):
+			base(ownsHandle) { base.SetHandle(preexistingHandle); }
+			protected override bool ReleaseHandle ()
+			{
+				try {
+					CheckResult (MSCNodeDestroy (handle));
+				} catch (Exception) {  return false; }
+				return true;
+			}
+		}
+
+		public sealed class MSCClientSocketSafeHandle : Microsoft.Win32.SafeHandles.SafeHandleZeroOrMinusOneIsInvalid
+		{
+			public MSCClientSocketSafeHandle():
+			this(true) { }
+			public MSCClientSocketSafeHandle(bool ownsHandle):
+			base(ownsHandle) { }
+			public MSCClientSocketSafeHandle(IntPtr preexistingHandle, bool ownsHandle):
 			base(ownsHandle) { base.SetHandle(preexistingHandle); }
 			protected override bool ReleaseHandle ()
 			{
@@ -637,7 +664,7 @@ namespace Merlion.Server
 			public delegate void DeployPackageDelegate (string versionName);
 			public delegate void LoadVersionDelegate(string versionName);
 			public delegate void AcceptClientDelegate(ulong clientId, string version, byte[] room);
-			public delegate void SetupClientDelegate(ulong clientId, ClientSetup setup);
+			public delegate void SetupClientDelegate(ulong clientId, ClientSocket clientSocket);
 			public delegate void DiscardClientDelegate(ulong clientId);
 			public delegate void FailureDelegate();
 
@@ -688,13 +715,11 @@ namespace Merlion.Server
 				}
 			}
 
-			uint HandleMSCSetupClientCallback (ulong clientId, [MarshalAs(UnmanagedType.LPStruct)] ref MSCClientSetup setup, IntPtr userdata)
+			uint HandleMSCSetupClientCallback (ulong clientId, IntPtr socket, IntPtr userdata)
 			{
 				try {
-					param.SetupClientMethod(clientId, new ClientSetup() {
-						WriteFileDescriptor = setup.writeStream,
-						ReadFileDescriptor = setup.readStream
-					});
+					var sock = new ClientSocket(socket);
+					param.SetupClientMethod(clientId, sock);
 					return 0;
 				} catch {
 					return 1;
@@ -859,6 +884,110 @@ namespace Merlion.Server
 			}
 		}
 
+		public sealed class ClientSocket: IDisposable
+		{
+			readonly MSCClientSocketSafeHandle handle;
+			Dictionary<long, object> handlers = new Dictionary<long, object>(); // Prevents handlers from being GC'd
+			long nextHandlerId;
+
+			public delegate void ReceiveCallbackDelegate(byte[] data, Exception error);
+			public delegate void SendCallbackDelegate(Exception error);
+
+			public ClientSocket(IntPtr handle)
+			{
+				this.handle = new MSCClientSocketSafeHandle(handle, true);
+			}
+
+			public void Receive(ReceiveCallbackDelegate callback)
+			{
+				if (callback == null)
+					throw new ArgumentNullException ("callback");
+
+				long handlerId = 0;
+				MSCClientSocketReceiveCallback cb = (unmanagedData, dataLength, error, userdata) => {
+					try {
+						handlers.Remove(handlerId);
+
+						Exception exc = null;
+						if (!string.IsNullOrEmpty(error)) {
+							exc = new Exception(error);
+						}
+
+						byte[] data = new byte[dataLength];
+						Marshal.Copy(unmanagedData, data, 0, dataLength);
+
+						callback(data, exc);
+						return 0;
+					} catch {
+						return 1;
+					}
+				};
+				handlerId = System.Threading.Interlocked.Increment (ref nextHandlerId);
+				handlers [handlerId] = cb;
+
+				try {
+					var result = MSCClientSocketReceive (handle, cb, IntPtr.Zero);
+					CheckResult (result);
+				} catch {
+					handlers.Remove (handlerId);
+					throw;
+				}
+			}
+
+			public void Send(byte[] data, int offset, int length, SendCallbackDelegate callback)
+			{
+				if (callback == null)
+					throw new ArgumentNullException ("callback");
+				if (data == null)
+					throw new ArgumentNullException ("data");
+				if (offset < 0)
+					throw new ArgumentOutOfRangeException ("offset");
+				if (length < 0 || checked(length + offset) > data.Length)
+					throw new ArgumentOutOfRangeException ("length");
+
+				long handlerId = 0;
+				MSCClientSocketSendCallback cb = (error, userdata) => {
+					try {
+						handlers.Remove(handlerId);
+
+						Exception exc = null;
+						if (!string.IsNullOrEmpty(error)) {
+							exc = new Exception(error);
+						}
+
+						callback(exc);
+						return 0;
+					} catch {
+						return 1;
+					}
+				};
+				handlerId = System.Threading.Interlocked.Increment (ref nextHandlerId);
+				handlers [handlerId] = cb;
+
+				try {
+					fixed (byte *ptr = data) {
+						var result = MSCClientSocketSend (handle, new IntPtr(ptr + offset), length, cb, IntPtr.Zero);
+						CheckResult (result);
+					}
+				} catch {
+					handlers.Remove (handlerId);
+					throw;
+				}
+			}
+
+			~ClientSocket()
+			{
+				Dispose();
+			}
+			public void Dispose ()
+			{
+				handle.Dispose ();
+			}
+			public MSCClientSocketSafeHandle SafeHandle
+			{
+				get { return handle; }
+			}
+		}
 	}
 }
 

@@ -33,6 +33,43 @@ using boost::format;
 namespace mcore
 {
 
+	namespace
+	{
+		std::string decodeRoomName(const std::string& encoded)
+		{
+			auto hex_decode = [] (char c) -> int
+			{
+				if (c >= '0' && c <= '9')
+					return c - '0';
+				else if (c >= 'a' && c <= 'f')
+					return c - 'a' + 10;
+				else if (c >= 'A' && c <= 'F')
+					return c - 'A' + 10;
+				else
+					return -1;
+			};
+			
+			if (encoded.size() & 1)
+				MSCThrow(InvalidFormatException("Length of the encoded room name must be even."));
+			
+			std::string ret;
+			ret.resize(encoded.size() >> 1);
+			
+			for (std::size_t i = 0; i < ret.size(); ++i) {
+				int digit1 = hex_decode(encoded[i * 2]);
+				int digit2 = hex_decode(encoded[i * 2 + 1]);
+				if (digit1 != -1 && digit2 != -1) {
+					char ch = static_cast<char>((digit1 << 4) | digit2);
+					ret[i] = ch;
+				} else {
+					MSCThrow(InvalidFormatException("Encoded room name contains an invalid character."));
+				}
+			}
+			
+			return ret;
+		}
+	}
+	
     MasterClient::MasterClient(Master& master, std::uint64_t id,
 							   bool allowSpecifyVersion):
 	clientId(id),
@@ -40,6 +77,7 @@ namespace mcore
 	_strand(service),
 	sslContext(master.sslContext()),
 	sslSocket(service, sslContext),
+	webSocketServer(sslSocket),
 	disposed(false),
 	timeoutTimer(service),
 	allowSpecifyVersion(allowSpecifyVersion)
@@ -72,7 +110,31 @@ namespace mcore
             shutdown();
         }));
     }
-    
+	
+	void MasterClient::rejectHandshake(int status)
+	{
+		auto self = shared_from_this();
+		std::lock_guard<ioMutexType> lock(mutex);
+		
+		try {
+			webSocketServer.async_reject(status,
+										 _strand.wrap([this, self] (const boost::system::error_code&) {
+				auto self = shared_from_this();
+				std::lock_guard<std::recursive_mutex> lock(mutex);
+				shutdown();
+			}));
+		} catch (...) {
+			BOOST_LOG_SEV(log, LogLevel::Error) <<
+			"Sending error response failed.: " <<
+			boost::current_exception_diagnostic_information();
+			shutdown();
+		}
+	}
+	
+	static std::regex urlRegex {
+		"\\/([^/]*)\\/([^/]*)"
+	};
+	
     void MasterClient::handshakeDone(const boost::system::error_code &error)
 	{
 		auto self = shared_from_this();
@@ -83,33 +145,64 @@ namespace mcore
             shutdown();
             return;
         }
-        
-        timeoutTimer.cancel();
-        
-        // Read prologue
-        auto buf = std::make_shared<std::array<char, 2048>>();
-        asio::async_read(sslSocket, asio::buffer(buf->data(), buf->size()), _strand.wrap([this, buf, self](const boost::system::error_code& error, std::size_t readCount) {
+		
+		webSocketServer.async_start_handshake(_strand.wrap([this, self] (const boost::system::error_code& error) {
 			
 			auto self = shared_from_this();
 			std::lock_guard<std::recursive_mutex> lock(mutex);
 			
 			if (error) {
-				BOOST_LOG_SEV(log, LogLevel::Debug) << "Reading prologue failed. Disconnecting.: " << error;
-                shutdown();
-                return;
-            }
-            
-            try {
-				// Read prologue.
-                PacketReader reader {buf->data(), buf->size()};
-                auto magic = reader.read<std::uint32_t>();
-                if (magic != ClientHeaderMagic) {
-                    MSCThrow(InvalidDataException(str(format("Invalid header magic 0x%08x.") % magic)));
-                }
+				BOOST_LOG_SEV(log, LogLevel::Debug) << "WebSocket Connect Handshake failed. Disconnecting.: " << error;
+				shutdown();
+				return;
+			}
+			
+			try {
 				
-				_room = reader.readString();
+				// Read subprotocols.
+				std::vector<std::string> protos;
+				boost::split(protos, webSocketServer.encoded_protocols(),
+							 [] (char c) { return c == ','; },
+							 boost::token_compress_on);
 				
-				std::string requestedVersion = reader.readString();
+				bool valid = false;
+				for (auto& proto: protos) {
+					boost::trim(proto);
+					if (boost::iequals(proto, "merlion.yvt.jp")) {
+						valid = true;
+						break;
+					}
+				}
+				
+				if (!valid) {
+					// Protocol negotiation failed.
+					BOOST_LOG_SEV(log, LogLevel::Debug) << "WebSocket subprotocol negotiation failed. Disconnecting.";
+					rejectHandshake(asiows::http_status_codes::bad_request);
+					return;
+				}
+				
+				std::string path = webSocketServer.http_absolute_path().path;
+				std::smatch matches;
+				
+				if (!std::regex_match(path, matches, urlRegex)) {
+					BOOST_LOG_SEV(log, LogLevel::Debug) << "Unrecognizable path format. Disconnecting.: " <<
+					boost::current_exception_diagnostic_information();
+					rejectHandshake(asiows::http_status_codes::not_found);
+					return;
+				}
+				
+				try {
+					_room = decodeRoomName(matches[2].str());
+				} catch (...) {
+					BOOST_LOG_SEV(log, LogLevel::Debug) << "Decoding room name failed. Disconnecting.: " <<
+					boost::current_exception_diagnostic_information();
+					rejectHandshake(asiows::http_status_codes::bad_request);
+				}
+				
+				BOOST_LOG_SEV(log, LogLevel::Debug) <<
+				format("Client requests room '%s' (hex encoded).") % matches[2].str();
+				
+				std::string requestedVersion = matches[1].str();
 				
 				BOOST_LOG_SEV(log, LogLevel::Debug) <<
 				format("Client requests version '%s'.") % requestedVersion;
@@ -125,50 +218,37 @@ namespace mcore
 				
 				std::shared_ptr<MasterClientResponse> resp(new MasterClientResponse(shared_from_this()));
 				
+				timeoutTimer.cancel();
+				
 				// Request a node to start a connection.
 				timeoutTimer.expires_from_now(boost::posix_time::seconds(5));
 				timeoutTimer.async_wait([resp](const boost::system::error_code& error) {
 					if (error)
 						return;
 					
-					resp->reject("Timed out.");
+					resp->reject("Timed out.",
+								 asiows::http_status_codes::request_timeout);
 				});
 				
 				onNeedsResponse(resp);
 				
-				// Wait for response...
-				
-			} catch (const InvalidDataException& ex) {
-				BOOST_LOG_SEV(log, LogLevel::Debug) << "Protocol error. Disconnecting.: " <<
-				boost::current_exception_diagnostic_information();
-				
-				respondStatus(ClientResponse::ProtocolError,
-							  [this, self](const boost::system::error_code&) {
-								  shutdown();
-							  });
 			} catch (...) {
 				BOOST_LOG_SEV(log, LogLevel::Warn) << "Internal server error. Disconnecting.: " <<
 				boost::current_exception_diagnostic_information();
-				
-				respondStatus(ClientResponse::InternalServerError,
-							  [this, self](const boost::system::error_code&) {
-								  shutdown();
-							  });
+				rejectHandshake(asiows::http_status_codes::internal_server_error);
 			}
-        }));
+			
+		}));
     }
 	
-	void MasterClient::connectionRejected()
+	void MasterClient::connectionRejected(int statusCode)
 	{
 		auto self = shared_from_this();
 		std::lock_guard<ioMutexType> lock(mutex);
 		
 		BOOST_LOG_SEV(log, LogLevel::Warn) << "Rejecting the client.";
 		
-		respondStatus(ClientResponse::ServerFull,
-					  [this, self](const boost::system::error_code&) {
-						  shutdown();
-					  });
+		rejectHandshake(statusCode);
 	}
 	
 	void MasterClient::connectionApproved(std::function<std::shared_ptr<BaseMasterClientHandler>()> onsuccess,
@@ -188,7 +268,7 @@ namespace mcore
 		
 		BOOST_LOG_SEV(log, LogLevel::Info) << "Connection approved.";
 		
-		respondStatus(ClientResponse::Success, [this, self, onsuccess, onfail](const boost::system::error_code &error) {
+		webSocketServer.async_accept("merlion.yvt.jp", _strand.wrap([this, self, onsuccess, onfail] (const boost::system::error_code &error) {
 			if (error) {
 				BOOST_LOG_SEV(log, LogLevel::Info) << "Failed to send 'Success' response. Disconnecting.";
 				onfail();
@@ -207,20 +287,8 @@ namespace mcore
 				}
 				timeoutTimer.cancel();
 			}
-		});
-	}
-	
-	template <class Callback>
-	void MasterClient::respondStatus(ClientResponse resp, Callback callback)
-	{
-		auto self = shared_from_this();
-		std::lock_guard<ioMutexType> lock(mutex);
-		
-		auto buf = std::make_shared<ClientResponse>(resp);
-		asio::async_write(sslSocket, asio::buffer(buf.get(), sizeof(ClientResponse)),
-		_strand.wrap([this, buf, self, callback](const boost::system::error_code& error, std::size_t) {
-			callback(error);
 		}));
+		
 	}
 	
 	bool MasterClient::doesAcceptVersion(const std::string &ver)
@@ -287,7 +355,7 @@ namespace mcore
 		onResponded(true);
 	}
 	
-	void MasterClientResponse::reject(const std::string& reason)
+	void MasterClientResponse::reject(const std::string& reason, int statusCode)
 	{
 		auto d = done.exchange(true);
 		if (d) {
@@ -298,8 +366,8 @@ namespace mcore
 		reason;
 		
 		auto cli = _client;
-		cli->_strand.dispatch([cli] {
-			cli->connectionRejected();
+		cli->_strand.dispatch([cli, statusCode] {
+			cli->connectionRejected(statusCode);
 		});
 		
 		onResponded(false);

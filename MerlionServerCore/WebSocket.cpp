@@ -18,6 +18,97 @@
 
 namespace asiows
 {
+	namespace detail
+	{
+		namespace
+		{
+			web_socket_server_regex_t web_socket_server_regex_;
+		}
+		const web_socket_server_regex_t& web_socket_server_regex()
+		{
+			return web_socket_server_regex_;
+		}
+	}
+	const char *http_status_text(int status)
+	{
+		const char *statusText = "Unknown";
+		switch (status) {
+			case 400:
+				statusText = "Bad Request";
+				break;
+			case 401:
+				statusText = "Unauthorized";
+				break;
+			case 402:
+				statusText = "Payment Required";
+				break;
+			case 403:
+				statusText = "Forbidden";
+				break;
+			case 404:
+				statusText = "Not Found";
+				break;
+			case 405:
+				statusText = "Method Not Allowed";
+				break;
+			case 406:
+				statusText = "Not Acceptable";
+				break;
+			case 407:
+				statusText = "Proxy Authentication Required";
+				break;
+			case 408:
+				statusText = "Request Timeout";
+				break;
+			case 409:
+				statusText = "Conflict";
+				break;
+			case 410:
+				statusText = "Gone";
+				break;
+			case 411:
+				statusText = "Length Required";
+				break;
+			case 412:
+				statusText = "Precondition Failed";
+				break;
+			case 413:
+				statusText = "Request Entity Too Large";
+				break;
+			case 414:
+				statusText = "Request-URI Too Long";
+				break;
+			case 415:
+				statusText = "Unsupported Media Type";
+				break;
+			case 416:
+				statusText = "Requested Range Not Satisfiable";
+				break;
+			case 417:
+				statusText = "Expectation Failed";
+				break;
+			case 500:
+				statusText = "Internal Server Error";
+				break;
+			case 501:
+				statusText = "Not Implemented";
+				break;
+			case 502:
+				statusText = "Bad Gateway";
+				break;
+			case 503:
+				statusText = "Service Unavailable";
+				break;
+			case 504:
+				statusText = "Gateway Timeout";
+				break;
+			case 505:
+				statusText = "HTTP Version Not Supported";
+				break;
+		}
+		return statusText;
+	}
+	
 	struct TESTSOCK
 	{
 	public:

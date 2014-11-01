@@ -21,6 +21,7 @@
 namespace mcore
 {
 	class NodeDomain;
+	class Library;
 	
 	class NodeClient :
 	public std::enable_shared_from_this<NodeClient>,
@@ -38,19 +39,19 @@ namespace mcore
 			
 			Closed
 		};
+		std::shared_ptr<Library> const library;
 		std::weak_ptr<NodeDomain> const domain;
 		std::uint64_t const _clientId;
 		State state;
 		std::atomic<bool> closed;
 		boost::asio::strand _strand;
 		std::string const room;
+		std::string const displayName;
 		
 		boost::asio::ip::tcp::socket masterSocket;
-		int upPipe[2];
-		int downPipe[2];
+		int pipe[2];
 		
-		boost::asio::local::stream_protocol::socket upSocket;
-		boost::asio::local::stream_protocol::socket downSocket;
+		boost::asio::local::stream_protocol::socket appSocket;
 		void socketDown();
 		
 		void connectToMaster();

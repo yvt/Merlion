@@ -150,7 +150,7 @@ namespace asiows
 				}
 			}
 		public:
-			class const_iterator :
+			struct const_iterator :
 			public std::iterator<std::bidirectional_iterator_tag, typename BaseBufferSequence::value_type>
 			{
 				const buffer_clipper *clipper;
@@ -1088,8 +1088,6 @@ namespace asiows
 			const web_socket_frame_header& hdr = parent.reader.header();
 			if (!is_control_frame(hdr.opcode)) {
 				// Message found.
-				parent.last_message_header_.payload_length = hdr.payload_length;
-				
 				// Continue reading.
 				parent.async_read_some(seq, this->callback);
 				return;
@@ -2087,13 +2085,13 @@ namespace asiows
 			};
 			
 			if (index == std::string::npos) {
-				undecoded_path = abspath;
+				encoded_path = abspath;
 			} else {
-				undecoded_path = abspath.substr(0, index);
+				encoded_path = abspath.substr(0, index);
 				encoded_query = abspath.substr(index + 1);
 			}
 			
-			path = url_decode(undecoded_path);
+			path = url_decode(encoded_path);
 			
 			if (encoded_query.size() > 0) {
 				std::list<std::string> parts;
@@ -2116,7 +2114,7 @@ namespace asiows
 			
 		}
 		
-		std::string undecoded_path;
+		std::string encoded_path;
 		std::string path;
 		std::string encoded_query;
 		std::list<std::pair<std::string, std::string>> query;
@@ -2153,89 +2151,8 @@ namespace asiows
 			http_version_not_supported = 505
 		};
 	}
-	
-	namespace
-	{
-		const char *http_status_text(int status)
-		{
-			const char *statusText = "Unknown";
-			switch (status) {
-				case 400:
-					statusText = "Bad Request";
-					break;
-				case 401:
-					statusText = "Unauthorized";
-					break;
-				case 402:
-					statusText = "Payment Required";
-					break;
-				case 403:
-					statusText = "Forbidden";
-					break;
-				case 404:
-					statusText = "Not Found";
-					break;
-				case 405:
-					statusText = "Method Not Allowed";
-					break;
-				case 406:
-					statusText = "Not Acceptable";
-					break;
-				case 407:
-					statusText = "Proxy Authentication Required";
-					break;
-				case 408:
-					statusText = "Request Timeout";
-					break;
-				case 409:
-					statusText = "Conflict";
-					break;
-				case 410:
-					statusText = "Gone";
-					break;
-				case 411:
-					statusText = "Length Required";
-					break;
-				case 412:
-					statusText = "Precondition Failed";
-					break;
-				case 413:
-					statusText = "Request Entity Too Large";
-					break;
-				case 414:
-					statusText = "Request-URI Too Long";
-					break;
-				case 415:
-					statusText = "Unsupported Media Type";
-					break;
-				case 416:
-					statusText = "Requested Range Not Satisfiable";
-					break;
-				case 417:
-					statusText = "Expectation Failed";
-					break;
-				case 500:
-					statusText = "Internal Server Error";
-					break;
-				case 501:
-					statusText = "Not Implemented";
-					break;
-				case 502:
-					statusText = "Bad Gateway";
-					break;
-				case 503:
-					statusText = "Service Unavailable";
-					break;
-				case 504:
-					statusText = "Gateway Timeout";
-					break;
-				case 505:
-					statusText = "HTTP Version Not Supported";
-					break;
-			}
-			return statusText;
-		}
-	}
+
+	const char *http_status_text(int status);
 	
 	enum class http_version
 	{
@@ -2296,6 +2213,7 @@ namespace asiows
 		const http_absolue_path& http_absolute_path() const { return http_absolute_path_; }
 		const std::string& host() const { return http_host_; }
 		const std::string& origin() const { return http_origin_; }
+		const std::string& encoded_protocols() const { return http_sec_websocket_protocol_; }
 		
 		bool handshake_done() const { return handshake_state_ == handshake_state_t::done; }
 		
@@ -2381,9 +2299,7 @@ namespace asiows
 				std::regex_constants::optimize | std::regex_constants::icase };
 		};
 		
-		static web_socket_server_regex_t web_socket_server_regex_;
-		const web_socket_server_regex_t& web_socket_server_regex()
-		{ return web_socket_server_regex_; }
+		extern const web_socket_server_regex_t& web_socket_server_regex();
 	}
 	
 	template <class NextLayer>
@@ -2454,10 +2370,10 @@ namespace asiows
 				assert(matches.size() == 5);
 				
 				// Check HTTP-Version.
-				if (matches[2].str() == "1") {
-					if (matches[3].str() == "0") {
+				if (matches[3].str() == "1") {
+					if (matches[4].str() == "0") {
 						parent.http_version_ = http_version::http_1_0;
-					} else if (matches[3].str() == "1") {
+					} else if (matches[4].str() == "1") {
 						parent.http_version_ = http_version::http_1_1;
 					} else {
 						goto unsupportedHttpVersion;
@@ -2538,6 +2454,8 @@ namespace asiows
 				parent.handshake_state_ = handshake_state_t::read_header;
 				this->callback(boost::system::error_code());
 				
+				return;
+				
 			} else {
 				// HTTP Header
 				
@@ -2550,13 +2468,17 @@ namespace asiows
 						if (quot) {
 							if (s[i] == '"') {
 								quot = false;
+								++i;
 							} else if (s[i] == '\\') {
 								i += 2;
+							} else {
+								++i;
 							}
 						} else {
 							if (s[i] == '"') {
 								quot = true;
 							}
+							++i;
 						}
 					}
 					
@@ -2591,6 +2513,8 @@ namespace asiows
 					// Ignore for now...
 				}
 			}
+			
+			perform();
 			
 		}
 		

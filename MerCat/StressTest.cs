@@ -109,7 +109,10 @@ namespace Merlion.MerCat
 						Client = new MerlionClient (MainClass.cmdArgs.Address);
 						lock (sync) {
 							State = WorkerState.Connecting;
-							Client.BeginConnect (HandleConnectDone, null);
+							Client.Connected += HandleConnectDone;
+							Client.Error += HandleError;
+							Client.Received += HandleReceived;
+							Client.Connect();
 						}
 					} catch (Exception ex) {
 						// Worker failed before it gets working.
@@ -118,7 +121,7 @@ namespace Merlion.MerCat
 				}
 			}
 
-			void HandleConnectDone (IAsyncResult ar)
+			void HandleConnectDone (object sender, EventArgs args)
 			{
 				try {
 					lock (sync) {
@@ -126,23 +129,25 @@ namespace Merlion.MerCat
 							// FIXME: leaving EndConnect not called is not preferrable
 							return;
 						}
-						Client.EndConnect(ar);
 						ResetTimeout();
 
 						State = WorkerState.Running;
 
 						SendPacket();
-						ReceivePacket();
 					}
 				} catch (Exception ex) {
 					Fail (ex);
 				}
 			}
 
+			void HandleError (object sender, ErrorEventArgs args)
+			{
+				Fail (args.Exception);
+			}
+
 			async Task SendPacket()
 			{
 				try {
-					var stream = Client.Stream;
 					long sentCount = 0;
 					while (true) {
 						int remainingBytes = MainClass.cmdArgs.ChunkSize;
@@ -156,7 +161,7 @@ namespace Merlion.MerCat
 						Test.MarkSentPacket();
 						while (remainingBytes > 0) {
 							var count = Math.Min(Test.sharedBuffer.Length, remainingBytes);
-							await stream.WriteAsync(Test.sharedBuffer, 0, count);
+							Client.Send(Test.sharedBuffer, 0, count); // FIXME: is this asynchronous?
 							remainingBytes -= count;
 
 							lock (sync) {
@@ -179,44 +184,23 @@ namespace Merlion.MerCat
 				}
 			}
 
-			async Task ReceivePacket()
+			int receivedBytes = 0;
+			void HandleReceived(object sender, ReceiveEventArgs args)
 			{
-				try {
-					var stream = Client.Stream;
-					while (true) {
-						int remainingBytes = MainClass.cmdArgs.ChunkSize;
-
-						lock (sync) {
-							if (State == WorkerState.Failed) {
-								return;
-							}
-						}
-
-						while (remainingBytes > 0) {
-							var count = Math.Min(Test.sharedBuffer.Length, remainingBytes);
-							count = await stream.ReadAsync(Test.sharedBuffer, 0, count);
-							remainingBytes -= count;
-
-							lock (sync) {
-								if (State == WorkerState.Failed) {
-									return;
-								}
-							}
-
-							if (count == 0) {
-								await Task.Delay(500);
-							} else {
-								ResetTimeout();
-							}
-						}
-
-						Test.MarkReceivedPacket();
+				lock (sync) {
+					if (State == WorkerState.Failed) {
+						return;
 					}
-				} catch (Exception ex) {
-					Fail (ex);
-					return;
+
+					receivedBytes += args.Data.Length;
+					while (receivedBytes >= MainClass.cmdArgs.ChunkSize) {
+						receivedBytes -= MainClass.cmdArgs.ChunkSize;
+						Test.MarkReceivedPacket ();
+					}
 				}
+
 			}
+
 		}
 
 		readonly Dictionary<long, Worker> workers = new Dictionary<long, Worker> ();

@@ -122,9 +122,9 @@ namespace Merlion.Server
 					throw;
 				}
 			};
-			param.SetupClientMethod = (clientId, setup) => {
+			param.SetupClientMethod = (clientId, socket) => {
 				try {
-					domains.SetupClient((long)clientId, setup);
+					domains.SetupClient((long)clientId, socket);
 				} catch (Exception ex) {
 					log.Warn(string.Format("Error while setting up the client '{0}'.", 
 						clientId), ex);

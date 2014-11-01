@@ -94,6 +94,10 @@
       <Project>{E12D56B3-2392-4AA1-AC3E-38363C141C6B}</Project>
       <Name>MerlionServerUtils</Name>
     </ProjectReference>
+    <ProjectReference Include="..\MerlionFramework\MerlionFramework.csproj">
+      <Project>{63038769-6F7D-48FA-BBB9-100B367B9FCC}</Project>
+      <Name>MerlionFramework</Name>
+    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
     <None Include="app.config" />

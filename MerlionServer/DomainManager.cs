@@ -184,11 +184,11 @@ namespace Merlion.Server
 		}
 
 
-		public void SetupClient(long clientId, NativeServerInterop.ClientSetup setup)
+		public void SetupClient(long clientId, NativeServerInterop.ClientSocket socket)
 		{
 			lock (domains)
 				foreach (var d in domains)
-					if (d.Value.SetupClient (clientId, setup))
+					if (d.Value.SetupClient (clientId, socket))
 						return;
 			throw new InvalidOperationException (string.Format ("Client '{0}' was not found in setup queue.", clientId));
 		}
