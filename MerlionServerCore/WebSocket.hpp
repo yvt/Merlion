@@ -21,6 +21,7 @@
 #include <list>
 #include <unordered_map>
 #include <regex>
+#include <boost/uuid/sha1.hpp>
 
 namespace asiows
 {
@@ -2543,6 +2544,10 @@ namespace asiows
 		op.perform();
 	}
 	
+	namespace detail
+	{
+		std::size_t base64_encode(char *dest, const char *src, std::size_t len);
+	}
 	
 	template <class NextLayer>
 	template <class Callback>
@@ -2577,12 +2582,37 @@ namespace asiows
 		
 		void perform(const std::string& protocol)
 		{
+			// Build Sec-WebSocket-Accept
+			boost::uuids::detail::sha1 sha;
+			sha.process_bytes(parent.http_sec_websocket_key_.data(),
+							  parent.http_sec_websocket_key_.size());
+			sha.process_bytes("258EAFA5-E914-47DA-95CA-C5AB0DC85B11",
+							  36);
+			union {
+				unsigned int digest[5];
+			};
+			char digestBytes[20];
+			sha.get_digest(digest);
+			
+			for (int i = 0; i < 5; ++i) {
+				auto dig = digest[i];
+				digestBytes[i * 4] = static_cast<char>(dig >> 24);
+				digestBytes[i * 4 + 1] = static_cast<char>(dig >> 16);
+				digestBytes[i * 4 + 2] = static_cast<char>(dig >> 8);
+				digestBytes[i * 4 + 3] = static_cast<char>(dig);
+			}
+			
+			char digestBase64[29];
+			digestBase64[28] = 0;
+			
+			detail::base64_encode(digestBase64, digestBytes, 20);
+			
 			std::ostringstream s;
 			s << "HTTP/1.1 101 Switching Protocols\r\n";
 			s << "Upgrade: websocket\r\n";
 			s << "Connection: Upgrade\r\n";
 			s << "Sec-WebSocket-Protocol: " << protocol << "\r\n";
-			s << "Sec-WebSocket-Accept: " << "hoge" << "\r\n"; // TODO: Sec-WebSocket-Accept
+			s << "Sec-WebSocket-Accept: " << digestBase64 << "\r\n";
 			s << "\r\n";
 			buffer = std::make_shared<std::string>(s.str());
 			

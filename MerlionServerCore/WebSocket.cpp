@@ -15,6 +15,9 @@
  */
 #include "Prefix.pch"
 #include "WebSocket.hpp"
+#include <boost/archive/iterators/base64_from_binary.hpp>
+#include <boost/archive/iterators/transform_width.hpp>
+#include <boost/archive/iterators/ostream_iterator.hpp>
 
 namespace asiows
 {
@@ -27,6 +30,42 @@ namespace asiows
 		const web_socket_server_regex_t& web_socket_server_regex()
 		{
 			return web_socket_server_regex_;
+		}
+		
+		using namespace boost::archive;
+		using namespace boost::archive::iterators;
+		
+		// Based on http://stackoverflow.com/questions/7053538/how-do-i-encode-a-string-to-base64-using-only-boost;
+		std::size_t base64_encode(char *dest, const char *src, std::size_t len)
+		{
+			char tail[3] = {0,0,0};
+			typedef base64_from_binary<transform_width<const char *, 6, 8> > base64_enc;
+			
+			uint one_third_len = len/3;
+			uint len_rounded_down = one_third_len*3;
+			uint j = len_rounded_down + one_third_len;
+			
+			std::copy(base64_enc(src), base64_enc(src + len_rounded_down), dest);
+			
+			if (len_rounded_down != len)
+			{
+				uint i=0;
+				for(; i < len - len_rounded_down; ++i)
+				{
+					tail[i] = src[len_rounded_down+i];
+				}
+				
+				std::copy(base64_enc(tail), base64_enc(tail + 3), dest + j);
+				
+				for(i=len + one_third_len + 1; i < j+4; ++i)
+				{
+					dest[i] = '=';
+				}
+				
+				return i;
+			}
+			
+			return j;
 		}
 	}
 	const char *http_status_text(int status)
