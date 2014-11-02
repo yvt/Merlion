@@ -147,6 +147,7 @@ namespace mcore
 							}
 							
 							socket->receiveBuffer.resize(socket->receiveBufferLen);
+							perform();
 						}
 						break;
 				}
@@ -226,8 +227,6 @@ namespace mcore
 			asiows::web_socket_message_header header;
 			webSocket.async_send_message(header, asio::buffer(*buffer),
 										 _strand.wrap([self, buffer, cb, this, it] (const boost::system::error_code& error) {
-				if (down_)
-					return;
 				
 				if (!shutdownListeners.empty()) {
 					shutdownListeners.erase(it);
@@ -266,12 +265,16 @@ extern "C"
 				MSCThrow(mcore::InvalidArgumentException("socket"));
 			auto &h = mcore::NodeClientSocket::fromHandle(socket);
 			h->receive([callback, userdata] (const std::vector<char>& buffer, const std::string& error) {
+				std::uint32_t ret;
 				if (error.empty()) {
-					callback(buffer.data(), static_cast<std::uint32_t>(buffer.size()),
+					ret = callback(buffer.data(), static_cast<std::uint32_t>(buffer.size()),
 							 nullptr, userdata);
 				} else {
-					callback(nullptr, 0,
+					ret = callback(nullptr, 0,
 							 error.c_str(), userdata);
+				}
+				if (ret) {
+					MSCThrow(mcore::InvalidOperationException("MSCClientSocketReceiveCallback failed."));
 				}
 			});
 		});
@@ -288,10 +291,14 @@ extern "C"
 				MSCThrow(mcore::InvalidArgumentException("data"));
 			auto &h = mcore::NodeClientSocket::fromHandle(socket);
 			h->send(data, dataLength, [callback, userdata] (const std::string& error) {
+				std::uint32_t ret;
 				if (error.empty()) {
-					callback(nullptr, userdata);
+					ret = callback(nullptr, userdata);
 				} else {
-					callback(error.c_str(), userdata);
+					ret = callback(error.c_str(), userdata);
+				}
+				if (ret) {
+					MSCThrow(mcore::InvalidOperationException("MSCClientSocketSendCallback failed."));
 				}
 			});
 		});

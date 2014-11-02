@@ -192,6 +192,8 @@ namespace Merlion.MerCat
 						return;
 					}
 
+					ResetTimeout ();
+
 					receivedBytes += args.Data.Length;
 					while (receivedBytes >= MainClass.cmdArgs.ChunkSize) {
 						receivedBytes -= MainClass.cmdArgs.ChunkSize;

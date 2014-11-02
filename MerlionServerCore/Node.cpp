@@ -326,7 +326,8 @@ namespace mcore
 			BOOST_LOG_SEV(log, LogLevel::Debug) << "State was 'not started'.";
 		}
 		
-		versionLoader->shutdown();
+		if(versionLoader)
+			versionLoader->shutdown();
 		versionLoader.reset();
 		
 		timeoutTimer.cancel();

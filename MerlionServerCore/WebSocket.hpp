@@ -22,6 +22,8 @@
 #include <unordered_map>
 #include <regex>
 #include <boost/uuid/sha1.hpp>
+#include <boost/detail/endian.hpp>
+#include <boost/predef/other/endian.h>
 
 namespace asiows
 {
@@ -29,6 +31,68 @@ namespace asiows
 	
 	namespace detail
 	{
+		
+		// Endian conversion (we want Boost Endian library...)
+		static_assert(sizeof(std::int8_t) == 1, "Platform not supported.");
+		static_assert(sizeof(std::uint8_t) == 1, "Platform not supported.");
+		static_assert(static_cast<unsigned int>(-1) == ~0U, "Platform not supported.");
+		
+		namespace
+		{
+			template <class T> inline T swap_endian(const T&)
+			{ static_assert(sizeof(T) != sizeof(T), "Unsupported type."); }
+			template<> inline std::int8_t swap_endian<std::int8_t>(const std::int8_t &c) { return c; }
+			template<> inline std::uint8_t swap_endian<std::uint8_t>(const std::uint8_t &c) { return c; }
+			template<> inline std::uint16_t swap_endian<std::uint16_t>(const std::uint16_t &v)
+			{
+				return (v << 8) | (v >> 8);
+			}
+			template<> inline std::int16_t swap_endian<std::int16_t>(const std::int16_t &v)
+			{ return static_cast<std::int16_t>(swap_endian(static_cast<std::uint16_t>(v))); }
+			template<> inline std::uint32_t swap_endian<std::uint32_t>(const std::uint32_t &v)
+			{
+				return (v << 24) | (v >> 24) | ((v & 0xff0000) >> 8) | ((v & 0xff00) << 8);
+			}
+			template<> inline std::int32_t swap_endian<std::int32_t>(const std::int32_t &v)
+			{ return static_cast<std::uint32_t>(swap_endian(static_cast<std::uint32_t>(v))); }
+			template<> inline std::uint64_t swap_endian<std::uint64_t>(const std::uint64_t &v)
+			{
+				if (sizeof(void *) >= 8) {
+					// Make use of fast 64bit arithmetic
+					return (v << 56) | (v >> 56) |
+					((v & 0xff000000000000) >> 40) | ((v & 0xff00) << 40) |
+					((v & 0xff0000000000) >> 24) | ((v & 0xff0000) << 24) |
+					((v & 0xff00000000) >> 8) | ((v & 0xff000000) << 8);
+				} else {
+					union {
+						struct {
+							std::uint32_t low, high;
+						} u32;
+						std::uint64_t u64;
+					} u;
+					u.u64 = v;
+					std::swap(u.u32.low, u.u32.high);
+					u.u32.low = swap_endian(u.u32.low);
+					u.u32.high = swap_endian(u.u32.high);
+					return u.u64;
+				}
+			}
+			template<> inline std::int64_t swap_endian<std::int64_t>(const std::int64_t &v)
+			{ return static_cast<std::uint64_t>(swap_endian(static_cast<std::uint64_t>(v))); }
+		
+#if BOOST_BYTE_ORDER == 4321
+			template <class T>
+			inline T host_to_network(const T &v) { return v; }
+#elif BOOST_BYTE_ORDER == 1234
+			template <class T>
+			inline T host_to_network(const T &v) { return swap_endian(v); }
+#else
+			static_assert(false, "Cannot determine the endianness.");
+#endif
+			template <class T>
+			inline T network_to_host(const T &v) { return host_to_network(v); }
+		}
+		
 		template <class Callback>
 		struct intermediate_op
 		{
@@ -126,27 +190,23 @@ namespace asiows
 		{
 			BaseBufferSequence baseSequence;
 			std::uintmax_t const length;
-			typename BaseBufferSequence::const_iterator baseEnd;
-			typename BaseBufferSequence::const_iterator baseLast;
+			std::size_t endIndex;
 			std::size_t finalLength = 0;
+			typename BaseBufferSequence::const_iterator baseEnd;
 			void init()
 			{
 				std::uintmax_t remaining = length;
+				endIndex = 0;
 				baseEnd = baseSequence.begin();
-				baseLast = baseSequence.begin();
 				while (baseEnd != baseSequence.end()) {
 					auto sz = boost::asio::buffer_size(*baseEnd);
-					if (baseEnd != baseSequence.begin())
-						++baseLast;
-					++baseEnd;
+					finalLength = static_cast<std::size_t>(sz);
+					++baseEnd; ++endIndex;
 					if (sz >= remaining) {
 						finalLength = static_cast<std::size_t>(remaining);
 						break;
 					} else {
 						remaining -= sz;
-						if (baseEnd == baseSequence.end()) {
-							baseLast = baseEnd;
-						}
 					}
 				}
 			}
@@ -155,6 +215,7 @@ namespace asiows
 			public std::iterator<std::bidirectional_iterator_tag, typename BaseBufferSequence::value_type>
 			{
 				const buffer_clipper *clipper;
+				std::size_t index = 0;
 				typename BaseBufferSequence::const_iterator baseIt;
 				using difference_type = std::ptrdiff_t;
 				using value_type = typename BaseBufferSequence::value_type;
@@ -162,12 +223,13 @@ namespace asiows
 				const_iterator(const const_iterator&) = default;
 				const_iterator(const_iterator&&) = default;
 				explicit const_iterator(const buffer_clipper& clipper,
-										const typename BaseBufferSequence::const_iterator& baseIt):
-				baseIt(baseIt), clipper(&clipper) { }
-				const_iterator & operator -- () { --baseIt; return *this; }
-				const_iterator & operator ++ () { ++baseIt; return *this; }
+										const typename BaseBufferSequence::const_iterator& baseIt,
+										std::size_t index):
+				baseIt(baseIt), clipper(&clipper), index(index) { }
+				const_iterator & operator -- () { --baseIt; --index; return *this; }
+				const_iterator & operator ++ () { ++baseIt; ++index; return *this; }
 				value_type operator * () const {
-					if (baseIt == clipper->baseLast) {
+					if (index + 1 == clipper->endIndex) {
 						// FIXME: support const buffer
 						void *ptr = boost::asio::buffer_cast<void *>(*baseIt);
 						return _asio::mutable_buffer(ptr, clipper->finalLength);
@@ -175,12 +237,12 @@ namespace asiows
 						return *baseIt;
 					}
 				}
-				bool operator == (const const_iterator& other) const { return baseIt == other.baseIt; }
-				bool operator != (const const_iterator& other) const { return baseIt != other.baseIt; }
-				const_iterator operator -- (int) { auto old = baseIt--; return const_iterator(clipper, old); }
-				const_iterator operator ++ (int) { auto old = baseIt++; return const_iterator(clipper, old); }
+				bool operator == (const const_iterator& other) const { return index == other.index; }
+				bool operator != (const const_iterator& other) const { return index != other.index; }
+				const_iterator operator -- (int) { auto old = baseIt--; auto oldI = index--; return const_iterator(clipper, old, oldI); }
+				const_iterator operator ++ (int) { auto old = baseIt++; auto oldI = index++; return const_iterator(clipper, old, oldI); }
 				std::ptrdiff_t operator - (const const_iterator& other) const
-				{ return baseIt - other.baseIt; }
+				{ return index - other.index; }
 			};
 			
 			buffer_clipper(buffer_clipper&&) = default;
@@ -194,8 +256,8 @@ namespace asiows
 			length(length)
 			{ init(); }
 			
-			const_iterator begin() const { return const_iterator(*this, baseSequence.begin()); }
-			const_iterator end() const { return const_iterator(*this, baseEnd); }
+			const_iterator begin() const { return const_iterator(*this, baseSequence.begin(), 0); }
+			const_iterator end() const { return const_iterator(*this, baseEnd, endIndex); }
 		};
 		
 		template <class Function>
@@ -233,17 +295,17 @@ namespace asiows
 				while (len > 0 && pos != 0) {
 					*buffer = *buffer ^ mask_.u8[pos];
 					pos = (pos + 1) & 3;
-					--len;
+					--len; ++buffer;
 				}
 				while (len >= 4) {
 					*reinterpret_cast<std::uint32_t*>(buffer) =
 					*reinterpret_cast<std::uint32_t*>(buffer) ^ mask_.u32;
-					len -= 4;
+					len -= 4; buffer += 4;
 				}
 				while (len > 0) {
 					*buffer = *buffer ^ mask_.u8[pos];
 					pos = (pos + 1) & 3;
-					--len;
+					--len; ++buffer;
 				}
 			}
 			
@@ -262,7 +324,7 @@ namespace asiows
 		};
 	}
 	
-	enum class web_socket_opcode
+	enum class web_socket_opcode : unsigned int
 	{
 		continuation = 0x0,
 		text_frame = 0x1,
@@ -274,7 +336,7 @@ namespace asiows
 	
 	static inline bool is_control_frame(web_socket_opcode opcode)
 	{
-		return (static_cast<int>(opcode) & 0x8) != 0;
+		return (static_cast<unsigned int>(opcode) & 0x8) != 0;
 	}
 	
 	struct web_socket_frame_header
@@ -342,7 +404,7 @@ namespace asiows
 				lenSize = 8;
 			}
 			if (header_.masking_key)
-				lenSize += 2;
+				lenSize += 4;
 			return lenSize;
 		}
 		
@@ -414,19 +476,19 @@ namespace asiows
 							break;
 						}
 						if (count == 2) {
-							// FIXME: big endian support
 							std::uint16_t headerVal = *reinterpret_cast<std::uint16_t *>(bufferVec.data());
+							headerVal = detail::network_to_host(headerVal);
 							auto& hdr = parent.header_;
-							hdr.fin = (headerVal & 0x1) != 0;
-							hdr.reserved1 = (headerVal & 0x2) != 0;
-							hdr.reserved2 = (headerVal & 0x4) != 0;
-							hdr.reserved3 = (headerVal & 0x8) != 0;
-							hdr.opcode = static_cast<web_socket_opcode>((headerVal >> 4) & 15);
-							if ((headerVal & 0x100) != 0)
+							hdr.fin = (headerVal & 0x8000) != 0;
+							hdr.reserved1 = (headerVal & 0x4000) != 0;
+							hdr.reserved2 = (headerVal & 0x2000) != 0;
+							hdr.reserved3 = (headerVal & 0x1000) != 0;
+							hdr.opcode = static_cast<web_socket_opcode>((headerVal >> 8) & 15);
+							if ((headerVal & 0x80) != 0)
 								hdr.masking_key = 0;
 							else
 								hdr.masking_key = boost::none;
-							hdr.payload_length = headerVal >> 9;
+							hdr.payload_length = headerVal & 0x7f;
 							
 							if (is_control_frame(hdr.opcode)) {
 								if (hdr.payload_length > 125 ||
@@ -456,10 +518,9 @@ namespace asiows
 							char const *buffer = bufferVec.data();
 							auto& hdr = parent.header_;
 							
-							// FIXME: big endian support
 							// FIXME: unaligned memory access possible
 							if (hdr.payload_length == 126) {
-								hdr.payload_length = *reinterpret_cast<std::uint16_t const *>(buffer);
+								hdr.payload_length = detail::network_to_host(*reinterpret_cast<std::uint16_t const *>(buffer));
 								buffer += 2;
 								
 								if (hdr.payload_length < 126) {
@@ -469,7 +530,7 @@ namespace asiows
 									break;
 								}
 							} else if (hdr.payload_length == 127) {
-								hdr.payload_length = *reinterpret_cast<std::uint64_t const *>(buffer);
+								hdr.payload_length = detail::network_to_host(*reinterpret_cast<std::uint64_t const *>(buffer));
 								buffer += 8;
 								
 								if (hdr.payload_length < 65536 ||
@@ -565,7 +626,7 @@ namespace asiows
 					parent.remainingBytes -= count;
 					
 					if (parent.masker)
-						parent.masker->apply(bufferSequence);
+						parent.masker->apply(detail::buffer_clipper<_asio::mutable_buffer, MutableBufferSequence>( bufferSequence, count));
 					
 					this->callback(boost::system::error_code(), count);
 				}
@@ -944,6 +1005,7 @@ namespace asiows
 				parent.last_message_header_ = hdr;
 				parent.read_state_ = read_state_t::reading_message;
 				this->callback(ec);
+				return;
 			}
 			
 			// Control frame.
@@ -986,7 +1048,7 @@ namespace asiows
 		{
 			_asio::async_read(parent,
 							  detail::infinitely_repeated_buffer_sequence<_asio::mutable_buffer>
-							  (parent.read_buffer_),
+							  (_asio::buffer(parent.read_buffer_)),
 							  std::move(*this));
 		}
 	};
@@ -1011,7 +1073,7 @@ namespace asiows
 		// if we are in middle of reading message,
 		// read to the end first
 		if (read_state_ == read_state_t::reading_message) {
-			receive_message_op<typename std::remove_reference<Callback>::type>
+			read_to_end_before_receiving_message_op<typename std::remove_reference<Callback>::type>
 			op(*this, std::forward<Callback>(cb));
 			op.perform();
 			return;
@@ -1021,6 +1083,7 @@ namespace asiows
 		assert(read_state_ == read_state_t::not_reading);
 		
 		read_state_ = read_state_t::finding_message;
+		reader.reset();
 		
 		receive_message_op<typename std::remove_reference<Callback>::type>
 		op(*this, std::forward<Callback>(cb));
@@ -1118,6 +1181,7 @@ namespace asiows
 		if (reader.remaining_bytes() == 0) {
 			if (reader.header().fin) {
 				// This is the final part of the message.
+				read_state_ = read_state_t::not_reading;
 				callback(boost::system::error_code(), 0);
 			} else {
 				// Find the next message.
@@ -1180,7 +1244,8 @@ namespace asiows
 				case web_socket_opcode::connection_close:
 					// Passive close.
 					if (count >= 2) {
-						parent.close_status_code_ = *reinterpret_cast<const std::uint16_t *>(data);
+						// FIXME: unaligned memory access possible
+						parent.close_status_code_ = detail::network_to_host(*reinterpret_cast<const std::uint16_t *>(data));
 						parent.close_reason_ = std::string(data + 2, count - 2);
 					}
 					switch (parent.state_) {
@@ -1246,7 +1311,7 @@ namespace asiows
 	template <class Callback>
 	void web_socket<NextLayer>::async_begin_write
 	(const web_socket_message_header &header, Callback &&cb)
-	{
+		{
 		if (write_state_ == write_state_t::not_writing) {
 			// Queue is empty.
 			
@@ -1316,7 +1381,7 @@ namespace asiows
 	template <class NextLayer>
 	template <class ConstBufferSequence, class Callback>
 	void web_socket<NextLayer>::async_write_some(ConstBufferSequence &&buffers, Callback &&cb)
-	{
+		{
 		if (write_state_ != write_state_t::writing_message) {
 			cb(make_error_code(boost::system::errc::invalid_argument), 0);
 			return;
@@ -1383,6 +1448,7 @@ namespace asiows
 		
 		void operator () (const boost::system::error_code& ec)
 		{
+			
 			// Check write queue
 			parent.write_state_ = write_state_t::not_writing;
 			if (!parent.write_queue.empty()) {
@@ -1404,7 +1470,7 @@ namespace asiows
 	template <class Callback>
 	void web_socket<NextLayer>::async_end_write
 	(Callback &&cb)
-	{
+		{
 		if (write_state_ != write_state_t::writing_message) {
 			cb(make_error_code(boost::system::errc::invalid_argument));
 			return;
@@ -1412,7 +1478,7 @@ namespace asiows
 		
 		// This is the final frame of the message.
 		sending_final_frame_ = true;
-		
+			
 		end_write_op<typename std::remove_reference<Callback>::type> op
 		(*this, std::forward<Callback>(cb));
 		op.perform();
@@ -1465,6 +1531,7 @@ namespace asiows
 		
 		void perform()
 		{
+			assert(parent.write_buffer_pos_ >= parent.write_buffer_real_start_pos);
 			_asio::async_write(parent.next_layer(),
 							   _asio::buffer(parent.write_buffer_.data() + parent.write_buffer_real_start_pos,
 											 parent.write_buffer_pos_ - parent.write_buffer_real_start_pos),
@@ -1513,30 +1580,29 @@ namespace asiows
 		// Make the header contents.
 		char *data = write_buffer_.data() + write_buffer_real_start_pos;
 		
-		// FIXME: big endian support
 		// FIXME: unaligned memory access possible
 		std::uint16_t prologue = 0;
-		if (hdr.fin) prologue |= 0x1;
-		if (hdr.reserved1) prologue |= 0x2;
-		if (hdr.reserved2) prologue |= 0x4;
-		if (hdr.reserved3) prologue |= 0x8;
-		prologue |= static_cast<std::uint16_t>(hdr.opcode) << 4;
-		if (hdr.masking_key) prologue |= 0x100;
+		if (hdr.fin) prologue |= 0x8000;
+		if (hdr.reserved1) prologue |= 0x4000;
+		if (hdr.reserved2) prologue |= 0x2000;
+		if (hdr.reserved3) prologue |= 0x1000;
+		prologue |= static_cast<std::uint16_t>(hdr.opcode) << 8;
+		if (hdr.masking_key) prologue |= 0x80;
 		if (hdr.payload_length > 65535) {
-			prologue |= 127 << 9;
+			prologue |= 127;
 		} else if (hdr.payload_length >= 126) {
-			prologue |= 126 << 9;
+			prologue |= 126;
 		} else {
-			prologue = static_cast<std::uint16_t>(hdr.payload_length << 9);
+			prologue |= static_cast<std::uint16_t>(hdr.payload_length);
 		}
-		*reinterpret_cast<std::uint16_t *>(data) = prologue;
+		*reinterpret_cast<std::uint16_t *>(data) = detail::host_to_network(prologue);
 		data += 2;
 		
 		if (hdr.payload_length > 65535) {
-			*reinterpret_cast<std::uint64_t *>(data) = hdr.payload_length;
+			*reinterpret_cast<std::uint64_t *>(data) = detail::host_to_network(hdr.payload_length);
 			data += 8;
 		} else if (hdr.payload_length >= 126) {
-			*reinterpret_cast<std::uint16_t *>(data) = static_cast<std::uint16_t>(hdr.payload_length);
+			*reinterpret_cast<std::uint16_t *>(data) = detail::host_to_network(static_cast<std::uint16_t>(hdr.payload_length));
 			data += 2;
 		}
 		
@@ -1941,8 +2007,7 @@ namespace asiows
 			buffer = std::make_shared<std::vector<char>>(reason.size() + 2);
 			
 			// FIXME: possible unaligned access
-			// FIXME: support big endian
-			*reinterpret_cast<std::uint16_t *>(buffer->data()) = status_code;
+			*reinterpret_cast<std::uint16_t *>(buffer->data()) = detail::host_to_network(status_code);
 			std::memcpy(buffer->data() + 2, reason.data(), reason.size());
 			
 			web_socket_message_header hdr;

@@ -190,7 +190,10 @@ namespace Merlion.MerCat
 			};
 
 			var outstream = Console.OpenStandardOutput ();
-			client.Received += (sender, e) => outstream.Write (e.Data, 0, e.Data.Length);
+			client.Received += (sender, e) => {
+				outstream.Write (e.Data, 0, e.Data.Length);
+				outstream.Flush ();
+			};
 
 			client.Connect ();
 
@@ -200,7 +203,7 @@ namespace Merlion.MerCat
 			while (true) {
 				int readCount = instream.Read (buffer, 0, buffer.Length);
 				if (readCount > 0) {
-					client.Send (buffer, 0, buffer.Length);
+					client.Send (buffer, 0, readCount);
 				} else {
 					return;
 				}

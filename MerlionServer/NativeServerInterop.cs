@@ -415,7 +415,7 @@ namespace Merlion.Server
 			protected override bool ReleaseHandle ()
 			{
 				try {
-					CheckResult (MSCNodeDestroy (handle));
+					CheckResult (MSCClientSocketDestroy (handle));
 				} catch (Exception) {  return false; }
 				return true;
 			}
@@ -913,12 +913,15 @@ namespace Merlion.Server
 							exc = new Exception(error);
 						}
 
-						byte[] data = new byte[dataLength];
-						Marshal.Copy(unmanagedData, data, 0, dataLength);
+						byte[] data = null;
+						if (unmanagedData != new IntPtr(0)) {
+							data = new byte[dataLength];
+							Marshal.Copy(unmanagedData, data, 0, dataLength);
+						}
 
 						callback(data, exc);
 						return 0;
-					} catch {
+					} catch (Exception e) {
 						return 1;
 					}
 				};

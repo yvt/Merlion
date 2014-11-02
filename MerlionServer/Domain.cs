@@ -119,7 +119,7 @@ namespace Merlion.Server
 			}
 
 			lock (clientsToSetup) {
-				var cli = new MerlionClientImpl (clientId);
+				var cli = clientFactory.CreateClient (clientId);
 				clientsToSetup [clientId] = cli;
 				new System.Threading.Tasks.Task (() => {
 					appServer.Accept(cli, room);
@@ -290,19 +290,20 @@ namespace Merlion.Server
 					log.Debug ("Exception while receiving a packet.", error);
 					Close ();
 				} else {
-					try {
-						OnReceived(new ReceiveEventArgs(data));
-					} catch (Exception ex) {
-						log.Error ("Unhandled exception thrown in one of receive handlers.", ex);
-						Close ();
-					}
-
-					lock (sync) {
-						if (socket == null) {
-							return;
+					Task.Factory.StartNew (() => {
+						try {
+							OnReceived(new ReceiveEventArgs(data));
+						} catch (Exception ex) {
+							log.Error ("Unhandled exception thrown in one of receive handlers.", ex);
+							Close ();
 						}
-						socket.Receive (receiveDelegate);
-					}
+						lock (sync) {
+							if (socket == null) {
+								return;
+							}
+							socket.Receive (receiveDelegate);
+						}
+					});
 				}
 			}
 
