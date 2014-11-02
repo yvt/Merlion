@@ -2,6 +2,7 @@
 using log4net;
 using System.Net.Sockets;
 using System.Net.Security;
+using System.Text.RegularExpressions;
 
 namespace Merlion.SimpleServer
 {
@@ -11,6 +12,7 @@ namespace Merlion.SimpleServer
 		static internal Server.ApplicationServer App;
 		static CommandLineArguments cmdArgs;
 		static internal NodeImpl Node;
+		static SuperWebSocket.WebSocketServer<ClientHandler> webSocketServer;
 
 		static internal System.Security.Cryptography.X509Certificates.X509Certificate Certificate;
 
@@ -29,15 +31,28 @@ namespace Merlion.SimpleServer
 			server.Start ();
 
 			log.InfoFormat ("Listening at '{0}:{1}'.", cmdArgs.ListenAddress, cmdArgs.ListenPort);
-			var listener = new TcpListener (new System.Net.IPEndPoint(cmdArgs.ListenAddress, cmdArgs.ListenPort));
-			listener.Start ();
+
+			var rootConfig = new SuperSocket.SocketBase.Config.RootConfig ();
+
+			var serverConfig = new SuperSocket.SocketBase.Config.ServerConfig ();
+			serverConfig.Name = "Merlion Simple Server";
+			serverConfig.Ip = cmdArgs.ListenAddress.ToString ();
+			serverConfig.Port = cmdArgs.ListenPort;
+			serverConfig.Mode = SuperSocket.SocketBase.SocketMode.Tcp;
+			serverConfig.Security = "tls";
+
+			var certConfig = new SuperSocket.SocketBase.Config.CertificateConfig ();
+			certConfig.FilePath = cmdArgs.CertificateFile;
+			certConfig.Password = cmdArgs.CertificatePassword;
+			serverConfig.Certificate = certConfig;
+
+			webSocketServer = new ServerImpl(new SuperWebSocket.SubProtocol.BasicSubProtocol<ClientHandler>("merlion.yvt.jp"));
+			webSocketServer.Setup (rootConfig, serverConfig);
+			webSocketServer.NewDataReceived += (session, value) => session.OnReceived (value);
+			webSocketServer.Start ();
 
 			while (true) {
-				var client = listener.AcceptTcpClient ();
-				client.ReceiveTimeout = 20000;
-				client.SendTimeout = 20000;
-
-				new System.Threading.Thread(c => new ClientHandler ((TcpClient)c)).Start(client);
+				System.Threading.Thread.Sleep (1000);
 			}
 		}
 
@@ -98,24 +113,31 @@ namespace Merlion.SimpleServer
 
 	}
 
-	sealed class ClientHandler
+	sealed class ServerImpl : SuperWebSocket.WebSocketServer<ClientHandler>
+	{
+		public ServerImpl (SuperWebSocket.SubProtocol.ISubProtocol<ClientHandler> subProtocol) : base (subProtocol)
+		{
+		}
+		
+	}
+
+	sealed class ClientHandler : SuperWebSocket.WebSocketSession<ClientHandler>
 	{
 		static readonly ILog log = LogManager.GetLogger(typeof(ClientHandler));
 		static int nextClientId = 1;
 
-		TcpClient client;
-		NetworkStream tcpStream;
 		int clientId;
-		SslStream ssl;
+
 
 		sealed class ClientImpl: Merlion.Server.MerlionClient
 		{
 			long clientId;
-			System.IO.Stream stream;
-			public ClientImpl(long clientId, System.IO.Stream stream)
+			ClientHandler session;
+			public ClientImpl(long clientId, ClientHandler session)
 			{
 				this.clientId = clientId;
-				this.stream = stream;
+				this.session = session;
+				session.Received += (sender, e) => this.OnReceived (new Merlion.Server.ReceiveEventArgs (e.Data));
 			}
 
 			public override long ClientId {
@@ -126,97 +148,85 @@ namespace Merlion.SimpleServer
 
 			public override void Close ()
 			{
-				throw new NotImplementedException ();
+				session.Close ();
 			}
 
 			public override void Send (byte[] data, int offset, int length)
 			{
-				throw new NotImplementedException ();
+				session.Send (data, offset, length);
 			}
 		}
 
-		public ClientHandler(TcpClient client)
+		public ClientHandler()
 		{
-			this.client = client;
-			this.tcpStream = client.GetStream ();
 
-			clientId = System.Threading.Interlocked.Increment (ref nextClientId);
-		
-			NDC.Push (string.Format ("Client:{0} [{1}]", clientId, client.Client.RemoteEndPoint));
-
-			log.Info ("Client connected.");
-
-			Service ();
-
-			log.Info ("Client disconnected.");
-
-			NDC.Pop ();
 		}
 
-		void Service()
+		public event EventHandler<Merlion.Server.ReceiveEventArgs> Received;
+
+		public void OnReceived(byte[] b)
 		{
+			var handler = Received;
+			if (handler != null)
+				handler (this, new Merlion.Server.ReceiveEventArgs (b));
+		}
+
+		protected override void OnInit ()
+		{
+			base.OnInit ();
+		}
+
+		static Regex urlRegex = new Regex (@"^\/([^/]*)\/([^/]*)$");
+
+		protected override void OnSessionStarted ()
+		{
+			clientId = System.Threading.Interlocked.Increment (ref nextClientId);
+
+			NDC.Push (string.Format ("Client:{0} [{1}]", clientId, RemoteEndPoint));
+
+			log.InfoFormat ("Client connected to '{0}'.", Path);
+
 			try {
-				// TODO: switch to WebSocket
 
-				log.Debug("Performing SSL Handshake.");
-
-				ssl = new SslStream(tcpStream, false);
-				ssl.AuthenticateAsServer(MainClass.Certificate);
-
-				log.Debug("Receiving prologue.");
-				byte[] prologue = new byte[2048];
-
-				if (ssl.Read(prologue, 0, 2048) < 2048) {
-					throw new System.IO.InvalidDataException("Premature header");
+				Path = System.Net.WebUtility.UrlDecode(Path);
+				var matches = urlRegex.Match(Path);
+				if (!matches.Success) {
+					throw new System.IO.InvalidDataException("Unrecognizable URL.");
 				}
-
-				int prologueIndex = 0;
-				uint headerMagic = BitConverter.ToUInt32(prologue, prologueIndex) ;
-				if (headerMagic != Merlion.Client.Protocol.HeaderMagic) {
-					throw new System.IO.InvalidDataException(string.Format("Got invalid header magic '{0}'.", headerMagic));
-				}
-
-				prologueIndex += 4;
-
-				int roomLen = BitConverter.ToInt32(prologue, prologueIndex);
-				prologueIndex += 4;
-
-				byte[] room = new byte[roomLen];
-				Buffer.BlockCopy(prologue, prologueIndex, room, 0, roomLen);
-				prologueIndex += roomLen;
-
-				int verLen = BitConverter.ToInt32(prologue, prologueIndex);
-				prologueIndex += 4;
-
-				byte[] ver = new byte[verLen];
-				Buffer.BlockCopy(prologue, prologueIndex, ver, 0, verLen);
-				prologueIndex += verLen;
+					
+				var ver = matches.Groups[1].Value;
+				var room = Merlion.Utils.HexEncoder.GetBytes(matches.Groups[2].Value);
 
 				log.DebugFormat("Requested version '{0}'. We ignore this request.",
-					System.Text.Encoding.UTF8.GetString(ver));
+					ver);
 
 				log.Info("Accepted.");
 
-				ssl.WriteByte((byte)Merlion.Client.Protocol.PrologueResult.Success);
-				ssl.Flush();
-
-				var cli = new ClientImpl(clientId, ssl);
+				var cli = new ClientImpl(clientId, this);
 				MainClass.App.Accept(cli, MainClass.Node.GetRoom(room));
 
 			} catch (Exception ex) {
 				log.Error ("Error occured while servicing.", ex);
+
 				try {
-					tcpStream.WriteByte((byte)Merlion.Client.Protocol.PrologueResult.ProtocolError);
-				} catch {
-				}
-				try {
-					tcpStream.Close();
-					tcpStream.Dispose();
-				} catch {}
-				try {
-					client.Close();
+					Close();
 				} catch {}
 			}
+
+			NDC.Pop ();
+
+			base.OnSessionStarted ();
+		}
+		protected override void OnSessionClosed (SuperSocket.SocketBase.CloseReason reason)
+		{
+
+			base.OnSessionClosed (reason);
+		}
+
+	
+		void Service()
+		{
+
 		}
 	}
 
@@ -257,7 +267,7 @@ namespace Merlion.SimpleServer
 		}
 	}
 
-	// Room is completely no-op because we only have one domain
+	// Room is almost no-op because we only have one domain
 	sealed class RoomImpl: Server.MerlionRoom
 	{
 		static Random r = new Random();
