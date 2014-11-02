@@ -287,7 +287,7 @@ extern "C"
 		return mcore::convertExceptionsToResultCode([&] {
 			if (!socket)
 				MSCThrow(mcore::InvalidArgumentException("socket"));
-			if (!data)
+			if (dataLength > 0 && !data)
 				MSCThrow(mcore::InvalidArgumentException("data"));
 			auto &h = mcore::NodeClientSocket::fromHandle(socket);
 			h->send(data, dataLength, [callback, userdata] (const std::string& error) {
