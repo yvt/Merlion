@@ -753,6 +753,7 @@ namespace asiows
 		
 		web_socket_message_header sent_message_header_;
 		bool sending_final_frame_ = false;
+		bool sending_first_frame_ = false;
 		std::function<boost::optional<std::uint32_t>()> masking_key_provider;
 		
 		// Largest possible frame header size.
@@ -1332,6 +1333,7 @@ namespace asiows
 			write_buffer_pos_ = write_buffer_start_pos;
 			write_state_ = write_state_t::writing_message;
 			sending_final_frame_ = false;
+			sending_first_frame_ = true;
 			
 			cb(boost::system::error_code());
 		} else {
@@ -1563,6 +1565,11 @@ namespace asiows
 		hdr.fin = sending_final_frame_;
 		hdr.payload_length = static_cast<std::uint64_t>(write_buffer_pos_ - write_buffer_start_pos);
 		hdr.masking_key = key;
+		if (!sending_first_frame_) {
+			hdr.opcode = web_socket_opcode::continuation;
+		} else {
+			sending_first_frame_ = false;
+		}
 		
 		// Compute the header length.
 		std::size_t headerSize = 2;
