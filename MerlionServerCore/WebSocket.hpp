@@ -952,7 +952,7 @@ namespace asiows
 	class web_socket<NextLayer>::receive_message_op: public detail::intermediate_op<Callback>
 	{
 		web_socket& parent;
-		
+		bool handling_control_frame_ = false;
 	public:
 		receive_message_op(web_socket &parent, const Callback& cb):
 		detail::intermediate_op<Callback>(cb),
@@ -984,6 +984,12 @@ namespace asiows
 				return;
 			}
 			
+			if (handling_control_frame_) {
+				handling_control_frame_ = false;
+				perform();
+				return;
+			}
+			
 			// Check state
 			switch (parent.state_) {
 				case state_t::closed:
@@ -1010,11 +1016,13 @@ namespace asiows
 			}
 			
 			// Control frame.
+			handling_control_frame_ = true;
 			parent.handle_control_frame(std::move(*this));
 		}
 		
 		void perform()
 		{
+			parent.reader.reset();
 			parent.reader.async_read_header(std::move(*this));
 		}
 	};
@@ -1084,7 +1092,6 @@ namespace asiows
 		assert(read_state_ == read_state_t::not_reading);
 		
 		read_state_ = read_state_t::finding_message;
-		reader.reset();
 		
 		receive_message_op<typename std::remove_reference<Callback>::type>
 		op(*this, std::forward<Callback>(cb));
@@ -1098,7 +1105,7 @@ namespace asiows
 	{
 		web_socket& parent;
 		MutableBufferSequence seq;
-		
+		bool handling_control_frame_ = false;
 	public:
 		template <class MutableBufferSequenceArg>
 		receive_message_continuation_op(web_socket &parent, MutableBufferSequenceArg&& seq, const Callback& cb):
@@ -1134,6 +1141,12 @@ namespace asiows
 				return;
 			}
 			
+			if (handling_control_frame_) {
+				handling_control_frame_ = false;
+				perform();
+				return;
+			}
+			
 			// Check state
 			switch (parent.state_) {
 				case state_t::closed:
@@ -1159,11 +1172,13 @@ namespace asiows
 			}
 			
 			// Control frame.
+			handling_control_frame_ = true;
 			parent.handle_control_frame(std::move(*this));
 		}
 		
 		void perform()
 		{
+			parent.reader.reset();
 			parent.reader.async_read_header(std::move(*this));
 		}
 	};
@@ -1219,7 +1234,7 @@ namespace asiows
 				this->callback(ec);
 				return;
 			}
-			if (count != parent.reader.header().payload_length != count) {
+			if (count != parent.reader.header().payload_length) {
 				this->callback(make_error_code(boost::system::errc::protocol_error));
 				return;
 			}
@@ -1292,8 +1307,7 @@ namespace asiows
 		void perform()
 		{
 			_asio::async_read(parent.reader,
-							  detail::infinitely_repeated_buffer_sequence<_asio::mutable_buffer>
-							  (_asio::buffer(parent.read_buffer_)),
+							  _asio::buffer(parent.read_buffer_),
 							  std::move(*this));
 		}
 	};

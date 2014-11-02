@@ -29,8 +29,14 @@ namespace Merlion.MerEcho
 
 		public override void Accept (Merlion.Server.MerlionClient client, Merlion.Server.MerlionRoom room)
 		{
+			log.Debug ("MerEcho started");
 			client.Received += (sender, e) => {
-				client.Send(e.Data);
+				try {
+					client.Send(e.Data);
+				} catch (Exception ex) {
+					log.Warn ("MerEcho error", ex);
+					client.Close();
+				}
 			};
 		}
 	}
