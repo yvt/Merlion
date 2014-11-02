@@ -43,14 +43,11 @@ namespace mcore
 	void NodeClientSocket::shutdown()
 	{
 		auto self = shared_from_this();
-		volatile bool done = false;
-		std::mutex doneMutex;
-		std::condition_variable doneCond;
 		down_ = true;
 		
 		BOOST_LOG_SEV(log, LogLevel::Debug) << "Shutting down.";
 		
-		_strand.dispatch([self, this, &done, &doneMutex, &doneCond] {
+		_strand.dispatch([self, this] {
 			try {
 				decltype(shutdownListeners) listeners;
 				listeners.swap(shutdownListeners);
@@ -76,18 +73,8 @@ namespace mcore
 				"Unhandled exception thrown in the shutdown procedure.: " <<
 				boost::current_exception_diagnostic_information();
 			}
-			
-			std::lock_guard<std::mutex> lock(doneMutex);
-			done = true;
-			doneCond.notify_all();
 		});
 		
-		std::unique_lock<std::mutex> lock(doneMutex);
-		while (!done) {
-			doneCond.wait(lock);
-		}
-		
-		BOOST_LOG_SEV(log, LogLevel::Debug) << "Shutdown completed.";
 	}
 	
 	template <class Callback>
