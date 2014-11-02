@@ -1057,7 +1057,7 @@ namespace asiows
 		{
 			_asio::async_read(parent,
 							  detail::infinitely_repeated_buffer_sequence<_asio::mutable_buffer>
-							  (_asio::buffer(parent.read_buffer_)),
+							  (_asio::buffer(parent.read_buffer_.data(), parent.read_buffer_.size())),
 							  std::move(*this));
 		}
 	};
@@ -1307,7 +1307,7 @@ namespace asiows
 		void perform()
 		{
 			_asio::async_read(parent.reader,
-							  _asio::buffer(parent.read_buffer_),
+							  _asio::buffer(parent.read_buffer_.data(), parent.read_buffer_.size()),
 							  std::move(*this));
 		}
 	};
