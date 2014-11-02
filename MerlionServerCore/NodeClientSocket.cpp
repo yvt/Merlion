@@ -37,30 +37,45 @@ namespace mcore
 	}
 	NodeClientSocket::~NodeClientSocket()
 	{
-		
+		BOOST_LOG_SEV(log, LogLevel::Debug) << "Finalized.";
 	}
 	
 	void NodeClientSocket::shutdown()
 	{
 		auto self = shared_from_this();
-		bool done = false;
+		volatile bool done = false;
 		std::mutex doneMutex;
 		std::condition_variable doneCond;
 		down_ = true;
 		
+		BOOST_LOG_SEV(log, LogLevel::Debug) << "Shutting down.";
+		
 		_strand.dispatch([self, this, &done, &doneMutex, &doneCond] {
-			
-			decltype(shutdownListeners) listeners;
-			listeners.swap(shutdownListeners);
-			
-			for (auto& f: listeners)
-				f();
-			
-			webSocket.async_shutdown(asiows::web_socket_close_status_codes::normal_closure, "", false,
-									 _strand.wrap([self, this] (const boost::system::error_code &) {
-				boost::system::error_code error;
-				socket.close(error);
-			}));
+			try {
+				decltype(shutdownListeners) listeners;
+				listeners.swap(shutdownListeners);
+				
+				for (auto& f: listeners) {
+					try {
+						f();
+					} catch (...) {
+						BOOST_LOG_SEV(log, LogLevel::Error)
+						<< "Unhandled exception thrown while doing shutdown clean-up.: "
+						<< boost::current_exception_diagnostic_information();
+					}
+				}
+				
+				webSocket.async_shutdown(asiows::web_socket_close_status_codes::normal_closure, "", false,
+										 _strand.wrap([self, this] (const boost::system::error_code &) {
+					boost::system::error_code error;
+					socket.close(error);
+				}));
+				
+			} catch (...) {
+				BOOST_LOG_SEV(log, LogLevel::Error) <<
+				"Unhandled exception thrown in the shutdown procedure.: " <<
+				boost::current_exception_diagnostic_information();
+			}
 			
 			std::lock_guard<std::mutex> lock(doneMutex);
 			done = true;
@@ -71,6 +86,8 @@ namespace mcore
 		while (!done) {
 			doneCond.wait(lock);
 		}
+		
+		BOOST_LOG_SEV(log, LogLevel::Debug) << "Shutdown completed.";
 	}
 	
 	template <class Callback>
