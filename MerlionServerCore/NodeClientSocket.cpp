@@ -160,7 +160,7 @@ namespace mcore
 						{
 							auto cb = callback;
 							socket->shutdownListeners.emplace_back([cb] {
-								std::vector<char> dummyBuffer;
+								vslim::vector_slim<char> dummyBuffer;
 								cb(dummyBuffer, "Socket is disconnected.");
 							});
 						}
@@ -208,7 +208,7 @@ namespace mcore
 		}
 		
 		auto self = shared_from_this();
-		auto buffer = std::make_shared<std::vector<char>>(length);
+		auto buffer = std::make_shared<vslim::vector_slim<char>>(length);
 		std::memcpy(buffer->data(), data, length);
 		
 		_strand.dispatch([self, buffer, cb, this] () mutable {
@@ -225,7 +225,7 @@ namespace mcore
 			auto it = shutdownListeners.begin();
 			
 			asiows::web_socket_message_header header;
-			webSocket.async_send_message(header, asio::buffer(*buffer),
+			webSocket.async_send_message(header, asio::buffer(buffer->data(), buffer->size()),
 										 _strand.wrap([self, buffer, cb, this, it] (const boost::system::error_code& error) {
 				
 				if (!shutdownListeners.empty()) {
@@ -264,7 +264,7 @@ extern "C"
 			if (!socket)
 				MSCThrow(mcore::InvalidArgumentException("socket"));
 			auto &h = mcore::NodeClientSocket::fromHandle(socket);
-			h->receive([callback, userdata] (const std::vector<char>& buffer, const std::string& error) {
+			h->receive([callback, userdata] (const vslim::vector_slim<char>& buffer, const std::string& error) {
 				std::uint32_t ret;
 				if (error.empty()) {
 					ret = callback(buffer.data(), static_cast<std::uint32_t>(buffer.size()),

@@ -297,11 +297,11 @@ namespace Merlion.Server
 		static extern MSCResult MSCClientSocketDestroy(IntPtr socket);
 		[DllImport("MerlionServerCore")]
 		static extern MSCResult MSCClientSocketReceive(MSCClientSocketSafeHandle socket,
-			MSCClientSocketReceiveCallback callback, IntPtr userdata);
+			IntPtr callback, IntPtr userdata);
 		[DllImport("MerlionServerCore")]
 		static extern MSCResult MSCClientSocketSend(MSCClientSocketSafeHandle socket,
 			IntPtr data, int dataLength,
-			MSCClientSocketSendCallback callback, IntPtr userdata);
+			IntPtr callback, IntPtr userdata);
 
 		static unsafe string GetLastError()
 		{
@@ -887,15 +887,68 @@ namespace Merlion.Server
 		public sealed class ClientSocket: IDisposable
 		{
 			readonly MSCClientSocketSafeHandle handle;
-			Dictionary<long, object> handlers = new Dictionary<long, object>(); // Prevents handlers from being GC'd
-			long nextHandlerId;
 
 			public delegate void ReceiveCallbackDelegate(byte[] data, Exception error);
 			public delegate void SendCallbackDelegate(Exception error);
 
+			MSCClientSocketReceiveCallback receiveCallback;
+			MSCClientSocketSendCallback sendCallback;
+
+			IntPtr receiveCallbackPtr;
+			IntPtr sendCallbackPtr;
+
 			public ClientSocket(IntPtr handle)
 			{
 				this.handle = new MSCClientSocketSafeHandle(handle, true);
+
+				receiveCallback = (unmanagedData, dataLength, error, userdata) => {
+					var gcHandle = GCHandle.FromIntPtr(userdata);
+					var callback = ((Tuple<ReceiveCallbackDelegate, object>)gcHandle.Target).Item1;
+					try {
+						try {
+
+							Exception exc = null;
+							if (!string.IsNullOrEmpty(error)) {
+								exc = new Exception(error);
+							}
+
+							byte[] data = null;
+							if (unmanagedData != new IntPtr(0)) {
+								data = new byte[dataLength];
+								Marshal.Copy(unmanagedData, data, 0, dataLength);
+							}
+
+							callback(data, exc);
+							return 0;
+						} catch (Exception e) {
+							return 1;
+						}
+					} finally {
+						gcHandle.Free();
+					}
+				};
+				receiveCallbackPtr = Marshal.GetFunctionPointerForDelegate(receiveCallback);
+
+				sendCallback = (error, userdata) => {
+					var gcHandle = GCHandle.FromIntPtr(userdata);
+					var callback = ((Tuple<SendCallbackDelegate, object>)gcHandle.Target).Item1;
+					try {
+						try {
+							Exception exc = null;
+							if (!string.IsNullOrEmpty(error)) {
+								exc = new Exception(error);
+							}
+
+							callback(exc);
+							return 0;
+						} catch {
+							return 1;
+						}
+					} finally {
+						gcHandle.Free();
+					}
+				};
+				sendCallbackPtr = Marshal.GetFunctionPointerForDelegate(sendCallback);
 			}
 
 			public void Receive(ReceiveCallbackDelegate callback)
@@ -903,36 +956,14 @@ namespace Merlion.Server
 				if (callback == null)
 					throw new ArgumentNullException ("callback");
 
-				long handlerId = 0;
-				MSCClientSocketReceiveCallback cb = (unmanagedData, dataLength, error, userdata) => {
-					try {
-						handlers.Remove(handlerId);
-
-						Exception exc = null;
-						if (!string.IsNullOrEmpty(error)) {
-							exc = new Exception(error);
-						}
-
-						byte[] data = null;
-						if (unmanagedData != new IntPtr(0)) {
-							data = new byte[dataLength];
-							Marshal.Copy(unmanagedData, data, 0, dataLength);
-						}
-
-						callback(data, exc);
-						return 0;
-					} catch (Exception e) {
-						return 1;
-					}
-				};
-				handlerId = System.Threading.Interlocked.Increment (ref nextHandlerId);
-				handlers [handlerId] = cb;
+				var wrappedCallback = new Tuple<ReceiveCallbackDelegate, object> (callback, receiveCallback);
+				var wrappedCallbackHandle = GCHandle.Alloc (wrappedCallback);
 
 				try {
-					var result = MSCClientSocketReceive (handle, cb, IntPtr.Zero);
+					var result = MSCClientSocketReceive (handle, receiveCallbackPtr, GCHandle.ToIntPtr(wrappedCallbackHandle));
 					CheckResult (result);
 				} catch {
-					handlers.Remove (handlerId);
+					wrappedCallbackHandle.Free ();
 					throw;
 				}
 			}
@@ -948,32 +979,17 @@ namespace Merlion.Server
 				if (length < 0 || checked(length + offset) > data.Length)
 					throw new ArgumentOutOfRangeException ("length");
 
-				long handlerId = 0;
-				MSCClientSocketSendCallback cb = (error, userdata) => {
-					try {
-						handlers.Remove(handlerId);
-
-						Exception exc = null;
-						if (!string.IsNullOrEmpty(error)) {
-							exc = new Exception(error);
-						}
-
-						callback(exc);
-						return 0;
-					} catch {
-						return 1;
-					}
-				};
-				handlerId = System.Threading.Interlocked.Increment (ref nextHandlerId);
-				handlers [handlerId] = cb;
-
+				var wrappedCallback = new Tuple<SendCallbackDelegate, object> (callback, sendCallback);
+				var wrappedCallbackHandle = GCHandle.Alloc (wrappedCallback);
+			
 				try {
 					fixed (byte *ptr = data) {
-						var result = MSCClientSocketSend (handle, new IntPtr(ptr + offset), length, cb, IntPtr.Zero);
+						var result = MSCClientSocketSend (handle, new IntPtr(ptr + offset), length, 
+							sendCallbackPtr, GCHandle.ToIntPtr(wrappedCallbackHandle));
 						CheckResult (result);
 					}
 				} catch {
-					handlers.Remove (handlerId);
+					wrappedCallbackHandle.Free ();
 					throw;
 				}
 			}

@@ -19,6 +19,7 @@
 #include "WebSocket.hpp"
 #include "Logging.hpp"
 #include <list>
+#include "VectorSlim.hpp"
 
 namespace mcore
 {
@@ -36,7 +37,7 @@ namespace mcore
 		boost::asio::strand _strand;
 		
 		asiows::web_socket<boost::asio::local::stream_protocol::socket&> webSocket;
-		std::vector<char> receiveBuffer;
+		vslim::vector_slim<char> receiveBuffer;
 		std::size_t receiveBufferLen;
 		
 		std::list<std::function<void()>> shutdownListeners;
