@@ -30,6 +30,8 @@ namespace Merlion.Server
 
 		public event EventHandler<ReceiveEventArgs> Received;
 
+		public event EventHandler<EventArgs> Closed;
+
 		public abstract void Send(byte[] data, int offset, int length);
 		public void Send(byte[] data)
 		{
@@ -130,6 +132,13 @@ namespace Merlion.Server
 		protected void OnReceived(ReceiveEventArgs args)
 		{
 			var handler = Received;
+			if (handler != null)
+				handler (this, args);
+		}
+
+		protected void OnClosed(EventArgs args)
+		{
+			var handler = Closed;
 			if (handler != null)
 				handler (this, args);
 		}

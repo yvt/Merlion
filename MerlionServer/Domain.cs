@@ -292,7 +292,11 @@ namespace Merlion.Server
 				} else {
 					Task.Factory.StartNew (() => {
 						try {
-							OnReceived(new ReceiveEventArgs(data));
+							if (data != null) {
+								OnReceived(new ReceiveEventArgs(data));
+							} else {
+								OnClosed(EventArgs.Empty);
+							}
 						} catch (Exception ex) {
 							log.Error ("Unhandled exception thrown in one of receive handlers.", ex);
 							Close ();

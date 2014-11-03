@@ -131,13 +131,24 @@ namespace Merlion.SimpleServer
 
 		sealed class ClientImpl: Merlion.Server.MerlionClient
 		{
+			static readonly ILog log = LogManager.GetLogger(typeof(ClientImpl));
 			long clientId;
 			ClientHandler session;
 			public ClientImpl(long clientId, ClientHandler session)
 			{
 				this.clientId = clientId;
 				this.session = session;
-				session.Received += (sender, e) => this.OnReceived (new Merlion.Server.ReceiveEventArgs (e.Data));
+				session.Received += (sender, e) => {
+					try {
+						if (e.Data != null) {
+							this.OnReceived (new Merlion.Server.ReceiveEventArgs (e.Data));
+						} else {
+							this.OnClosed (EventArgs.Empty);
+						}
+					} catch (Exception ex) {
+						log.Error("Exception in Received or Closed handler.", ex);
+					}
+				};
 			}
 
 			public override long ClientId {
@@ -219,7 +230,7 @@ namespace Merlion.SimpleServer
 		}
 		protected override void OnSessionClosed (SuperSocket.SocketBase.CloseReason reason)
 		{
-
+			OnReceived (null);
 			base.OnSessionClosed (reason);
 		}
 
