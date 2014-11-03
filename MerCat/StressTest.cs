@@ -237,8 +237,8 @@ namespace Merlion.MerCat
 
 		async Task SpawnLater()
 		{
-			// FIXME: this should use other parameter
-			await Task.Delay (MainClass.cmdArgs.SpawnInterval);
+			// FIXME: make this variable
+			await Task.Delay (5000);
 			SpawnWorker ();
 		}
 
