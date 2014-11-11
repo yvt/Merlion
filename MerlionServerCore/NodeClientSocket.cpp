@@ -163,7 +163,7 @@ namespace mcore
 					case State::ReceiveMessage:
 						{
 							auto cb = callback;
-							socket->shutdownListeners.emplace_back([cb] {
+							socket->shutdownListeners.emplace_front([cb] {
 								vslim::vector_slim<char> dummyBuffer;
 								cb(dummyBuffer, "Socket is disconnected.");
 							});
@@ -222,7 +222,7 @@ namespace mcore
 			}
 			
 			{
-				shutdownListeners.emplace_back([cb] {
+				shutdownListeners.emplace_front([cb] {
 					cb("Socket is disconnected.");
 				});
 			}
