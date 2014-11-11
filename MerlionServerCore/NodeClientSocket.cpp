@@ -98,11 +98,14 @@ namespace mcore
 			callback(cb)
 			{ }
 			
-			void done()
+			bool done()
 			{
 				socket->receiving_ = false;
 				if (!socket->shutdownListeners.empty()) {
 					socket->shutdownListeners.erase(shutdownListenersIter);
+					return true;
+				} else {
+					return false;
 				}
 			}
 			
@@ -112,8 +115,8 @@ namespace mcore
 					case State::ReceiveMessage:
 						if (error) {
 							socket->receiveBuffer.resize(0);
-							done();
-							callback(socket->receiveBuffer, error.message());
+							if(done())
+								callback(socket->receiveBuffer, error.message());
 						} else {
 							state = State::ReadMessage;
 							perform();
@@ -122,14 +125,13 @@ namespace mcore
 					case State::ReadMessage:
 						if (error) {
 							socket->receiveBuffer.resize(0);
-							done();
-							callback(socket->receiveBuffer, error.message());
+							if(done())
+								callback(socket->receiveBuffer, error.message());
 						} else if (count == 0) {
 							socket->receiveBuffer.resize(socket->receiveBufferLen);
-							done();
 							
 							try {
-								if (!socket->down_)
+								if (done())
 									callback(socket->receiveBuffer, std::string());
 							} catch (...) {
 								BOOST_LOG_SEV(socket->log, LogLevel::Error)
@@ -146,7 +148,8 @@ namespace mcore
 								socket->webSocket.async_shutdown(asiows::web_socket_close_status_codes::too_big,
 																 "Packet size is limited to 65536 bytes.", true,
 																 socket->_strand.wrap([self](const boost::system::error_code&){}));
-								callback(socket->receiveBuffer, "Received packet is too long.");
+								if (done())
+									callback(socket->receiveBuffer, "Received packet is too long.");
 								return;
 							}
 							
@@ -234,13 +237,19 @@ namespace mcore
 				
 				if (!shutdownListeners.empty()) {
 					shutdownListeners.erase(it);
+					try {
+						if (error) {
+							cb(error.message());
+						} else {
+							cb(std::string());
+						}
+					} catch (...) {
+						BOOST_LOG_SEV(log, LogLevel::Error)
+						<< "Error occured in packet send completion handler.: "
+						<< boost::current_exception_diagnostic_information();
+					}
 				}
 				
-				if (error) {
-					cb(error.message());
-				} else {
-					cb(std::string());
-				}
 			}));
 		});
 	}

@@ -763,7 +763,9 @@ namespace asiows
 			// Not writing.
 			not_writing,
 			
-			writing_message
+			writing_message,
+			
+			waiting_to_write
 		};
 		write_state_t write_state_ = write_state_t::not_writing;
 		
@@ -776,8 +778,10 @@ namespace asiows
 			auto cbbox = std::make_shared<typename std::remove_reference<Callback>::type>(std::forward<Callback>(cb));
 			auto hdr = header;
 			write_queue.push_back([this, cbbox, hdr] () {
+				write_state_ = write_state_t::waiting_to_write;
 				boost_asio_handler_invoke_helpers::invoke([this, cbbox, hdr] {
-					assert(write_state_ == write_state_t::not_writing);
+					assert(write_state_ == write_state_t::waiting_to_write);
+					write_state_ = write_state_t::not_writing;
 					async_begin_write(hdr, *cbbox);
 				}, *cbbox);
 			});
