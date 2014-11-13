@@ -172,12 +172,12 @@ namespace mcore
 							});
 						}
 						shutdownListenersIter = socket->shutdownListeners.begin();
-						socket->webSocket.async_receive_message(std::move(*this));
+						socket->webSocket.async_receive_message(socket->_strand.wrap(std::move(*this)));
 						break;
 					case State::ReadMessage:
 						socket->receiveBuffer.resize(socket->receiveBufferLen + 4096);
 						socket->webSocket.async_read_some(asio::buffer(socket->receiveBuffer.data() + socket->receiveBufferLen,
-																	   4096), std::move(*this));
+																	   4096), socket->_strand.wrap(std::move(*this)));
 						break;
 				}
 			}
