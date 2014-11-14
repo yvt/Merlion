@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using log4net;
+using System.Security.Permissions;
 
 namespace Merlion.Server.RoomFramework
 {
@@ -12,7 +13,34 @@ namespace Merlion.Server.RoomFramework
 
 		readonly object sync = new object();
 
-		readonly Queue<Action> tasks = new Queue<Action>(64);
+		struct Work
+		{
+			readonly Action callback;
+
+			readonly ExecutionContext context; 
+
+			static readonly ContextCallback contextCallback = (state) => ((Action)state)();
+
+			public Work(Action action, bool captureContext)
+			{
+				callback = action;
+				if (captureContext)
+					context = ExecutionContext.Capture();
+				else
+					context = null;
+			}
+
+			public void Invoke()
+			{
+				if (context != null) {
+					ExecutionContext.Run (context, contextCallback, callback);
+				} else {
+					callback ();
+				}
+			}
+		}
+
+		readonly Queue<Work> tasks = new Queue<Work>(64);
 
 		bool workerRunning = false;
 		Thread invokingThread = null;
@@ -39,7 +67,7 @@ namespace Merlion.Server.RoomFramework
 		{
 			while (true) {
 				await invokeSem.WaitAsync ();
-				Action task;
+				Work task;
 				lock (sync) {
 					if (tasks.Count == 0) {
 						// No more to do
@@ -53,7 +81,7 @@ namespace Merlion.Server.RoomFramework
 				var lastSC = SynchronizationContext.Current;
 				SynchronizationContext.SetSynchronizationContext (GetSynchronizationContext());
 				try {
-					task();
+					task.Invoke();
 				} catch (Exception ex) {
 					log.Fatal ("Unhandled exception thrown in the asynchronous callback.", ex);
 				} finally {
@@ -82,15 +110,24 @@ namespace Merlion.Server.RoomFramework
 			}
 		}
 
-		public void Post (Action action)
+		void PostInternal(Action action, bool capturesContext)
 		{
+			if (action == null)
+				throw new ArgumentNullException ("action");
 			lock (sync) {
-				tasks.Enqueue (action);
+				tasks.Enqueue (new Work(action, capturesContext));
 
 				if (!workerRunning) {
 					StartWorker ();
 				}
 			}
+		}
+
+		public void Post (Action action)
+		{
+			if (action == null)
+				throw new ArgumentNullException ("action");
+			PostInternal (action, true);
 		}
 
 		public void Dispatch (Action action)
