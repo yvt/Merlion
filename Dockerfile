@@ -77,6 +77,10 @@ ENTRYPOINT ["/usr/bin/mono", "MerlionServer.exe"]
 # Accept nodes (master only)
 EXPOSE 5000
 
-# Accept clients (master only)
+# Accept web management console access (master only)
 EXPOSE 11450
+
+# Accept clients (master only)
+EXPOSE 16070
+
 
