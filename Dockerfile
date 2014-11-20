@@ -72,7 +72,7 @@ WORKDIR ${MERLION_BIN_ROOT}
 RUN rm -f MerlionServer.exe.config && ln -s ${MERLION_CONFIG_ROOT}/server.config MerlionServer.exe.config
 
 # Command
-CMD mono MerlionServer.exe
+ENTRYPOINT ["/usr/bin/mono", "MerlionServer.exe"]
 
 # Accept nodes (master only)
 EXPOSE 5000
