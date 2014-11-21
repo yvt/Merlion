@@ -27,13 +27,59 @@ namespace Merlion.Server
 		public static System.Collections.Specialized.NameValueCollection AppSettings
 		{
 			get {
-				if (appset == null)
-					appset = ConfigurationManager.AppSettings;
+				if (appset == null) {
+					var realAppSet = ConfigurationManager.AppSettings;
+					var s = new System.Collections.Specialized.NameValueCollection ();
+					foreach (string e in realAppSet.Keys) {
+						var val = realAppSet [e];
+						s [e] = ExpandEnvironmentVariables (val);
+					}
+					appset = s;
+				}
 				return appset; 
 			}
 			set {
 				appset = value;
 			}
+		}
+
+		static string ExpandEnvironmentVariables(string text)
+		{
+			if (!text.Contains ("%"))
+				return text;
+			var sb = new System.Text.StringBuilder ();
+			int index = 0;
+
+			while (true) {
+				int next = text.IndexOf ('%', index);
+				if (next < 0 || next == text.Length - 1) {
+					sb.Append (text, index, text.Length - index);
+					break;
+				}
+
+				sb.Append (text, index, next - index);
+				if (text[next + 1] == '%') {
+					sb.Append ('%');
+					index = next + 2;
+					continue;
+				}
+
+				int end = text.IndexOf ('%', next + 1);
+				if (end < 0) {
+					sb.Append ('%');
+					index = next + 1;
+					continue;
+				}
+
+				var envname = text.Substring (next + 1, end - next - 1);
+				index = end + 1;
+
+				var envval = Environment.GetEnvironmentVariable (envname);
+				if (envval != null)
+					sb.Append (envval);
+			}
+
+			return sb.ToString ();
 		}
 
 		public static object CreateObject(string text)
