@@ -55,7 +55,8 @@ ENV CC /usr/bin/clang
 ENV CXX /usr/bin/clang++
 RUN cmake \
  ${MERLION_SRC_ROOT}/MerlionServerCore \
- && cd ${MERLION_BIN_ROOT} && make -j4
+ && cd ${MERLION_BIN_ROOT} && make -j4 \
+ && rm -Rf CMakeFiles
 
 # Build MerlionServer
 WORKDIR ${MERLION_SRC_ROOT}
