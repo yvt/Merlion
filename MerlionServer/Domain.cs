@@ -122,7 +122,13 @@ namespace Merlion.Server
 				var cli = clientFactory.CreateClient (clientId);
 				clientsToSetup [clientId] = cli;
 				new System.Threading.Tasks.Task (() => {
-					appServer.Accept(cli, room);
+					try {
+						appServer.Accept(cli, room);
+						cli.AcceptDone();
+					} catch (Exception ex) {
+						log.Warn(string.Format("{0}: Exception thrown while accepting a client.", clientId), ex);
+						cli.AcceptFailed();
+					}
 				}).Start ();
 			}
 		}
@@ -269,18 +275,153 @@ namespace Merlion.Server
 			readonly object sync = new object();
 			readonly NativeServerInterop.ClientSocket.ReceiveCallbackDelegate receiveDelegate;
 
+			enum State
+			{
+				Initial,
+				WaitingSetupOrDiscardAfterAccept,
+				WaitingSetupOrDiscardAfterAcceptError,
+				WaitingAcceptAfterSetup,
+				WaitingAcceptAfterDiscarded,
+
+				// Following states have readyEvent set.
+				Established,
+				Closed
+			}
+
+			State state = State.Initial;
+
 			public MerlionClientImpl(long clientId)
 			{
 				this.clientId = clientId;
 				this.receiveDelegate = HandleReceive;
 			}
 
+			void Established()
+			{
+				readyEvent.Set ();
+				socket.Receive (receiveDelegate);
+			}
+
+			void ClosedOrDiscarded(bool acceptDone)
+			{
+
+				socket.Dispose ();
+				socket = null;
+
+				readyEvent.Set ();
+				if (acceptDone) {
+					try {
+						OnClosed (EventArgs.Empty);
+					} catch (Exception ex) {
+						log.Error ("Unhandled exception thrown in one of close handlers.", ex);
+					}
+				}
+			}
+
 			public void Setup(IntPtr stream)
 			{
 				lock (sync) {
 					socket = new NativeServerInterop.ClientSocket (stream);
+					switch (state) {
+					case State.Initial:
+						state = State.WaitingAcceptAfterSetup;
+						break;
+					case State.WaitingSetupOrDiscardAfterAccept:
+						state = State.Established;
+						Established ();
+						break;
+					case State.WaitingSetupOrDiscardAfterAcceptError:
+						state = State.Closed;
+						ClosedOrDiscarded (false);
+						break;
+					case State.WaitingAcceptAfterSetup:
+					case State.WaitingAcceptAfterDiscarded:
+					case State.Established:
+					case State.Closed:
+						throw new InvalidOperationException ();
+					default:
+						throw new InvalidOperationException ("Invalid state.");
+					}
+				}
+			}
+
+			public void Discard()
+			{
+				lock (sync) {
+					switch (state) {
+					case State.Initial:
+						state = State.WaitingAcceptAfterDiscarded;
+						break;
+					case State.WaitingSetupOrDiscardAfterAccept:
+						state = State.Closed;
+						ClosedOrDiscarded (true);
+						break;
+					case State.WaitingSetupOrDiscardAfterAcceptError:
+						state = State.Closed;
+						ClosedOrDiscarded (false);
+						break;
+					case State.WaitingAcceptAfterSetup:
+					case State.WaitingAcceptAfterDiscarded:
+					case State.Established:
+					case State.Closed:
+						throw new InvalidOperationException ();
+					default:
+						throw new InvalidOperationException ("Invalid state.");
+					}
+
 					readyEvent.Set ();
-					socket.Receive (receiveDelegate);
+				}
+			}
+
+			public void AcceptDone()
+			{
+				lock (sync) {
+					switch (state) {
+					case State.Initial:
+						state = State.WaitingSetupOrDiscardAfterAccept;
+						break;
+					case State.WaitingAcceptAfterSetup:
+						state = State.Established;
+						Established ();
+						break;
+					case State.WaitingAcceptAfterDiscarded:
+						state = State.Closed;
+						ClosedOrDiscarded (true);
+						break;
+					case State.Established:
+					case State.Closed:
+					case State.WaitingSetupOrDiscardAfterAccept:
+					case State.WaitingSetupOrDiscardAfterAcceptError:
+						throw new InvalidOperationException ();
+					default:
+						throw new InvalidOperationException ("Invalid state.");
+					}
+				}
+			}
+
+			public void AcceptFailed()
+			{
+				lock (sync) {
+					switch (state) {
+					case State.Initial:
+						state = State.WaitingSetupOrDiscardAfterAcceptError;
+						break;
+					case State.WaitingAcceptAfterSetup:
+						state = State.Established;
+						Established ();
+						break;
+					case State.WaitingAcceptAfterDiscarded:
+						state = State.Closed;
+						ClosedOrDiscarded (false);
+						break;
+					case State.Established:
+					case State.Closed:
+					case State.WaitingSetupOrDiscardAfterAccept:
+					case State.WaitingSetupOrDiscardAfterAcceptError:
+						throw new InvalidOperationException ();
+					default:
+						throw new InvalidOperationException ("Invalid state.");
+					}
 				}
 			}
 
@@ -293,6 +434,7 @@ namespace Merlion.Server
 					Task.Factory.StartNew (() => {
 						try {
 							if (data != null) {
+								// FIXME: don't OnReceived before Accept is done
 								OnReceived(new ReceiveEventArgs(data));
 							} else {
 								OnClosed(EventArgs.Empty);
@@ -311,14 +453,6 @@ namespace Merlion.Server
 				}
 			}
 
-			public void Discard()
-			{
-				lock (sync) {
-					readyEvent.Set ();
-				}
-				Close ();
-			}
-
 			public override long ClientId {
 				get {
 					return clientId;
@@ -333,6 +467,8 @@ namespace Merlion.Server
 					var s = Interlocked.Exchange (ref socket, null);
 					if (s != null)
 						s.Dispose ();
+
+					state = State.Closed;
 				}
 			}
 
