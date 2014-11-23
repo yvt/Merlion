@@ -155,16 +155,22 @@ namespace Merlion.Server.RoomFramework
 			}
 		}
 
-		public async void Send(byte[] data)
+		public async void Send(byte[] data, int start, int length)
 		{
+			// FIXME: check bounds safely
 			try {
-				await MerlionClient.SendAsync (data);
+				await MerlionClient.SendAsync (data, start, length);
 			} catch (Exception ex) {
 				; // just ignore...
 
 				// Even if Send succeeds we cannot guarantee that client can receive the
 				// sent packet.
 			}
+		}
+
+		public void Send(byte[] data)
+		{
+			Send (data, 0, data.Length);
 		}
 	}
 
