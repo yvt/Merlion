@@ -24,6 +24,14 @@
 #include <boost/uuid/sha1.hpp>
 #include <boost/detail/endian.hpp>
 #include <boost/predef/other/endian.h>
+#include <boost/asio/read.hpp>
+#include <boost/asio/read_until.hpp>
+#include <boost/asio/write.hpp>
+#include <boost/optional.hpp>
+#include <boost/asio/streambuf.hpp>
+#include <istream>
+#include <ostream>
+#include <sstream>
 
 namespace asiows
 {
